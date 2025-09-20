@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "My Chrome Extension",
+  "version": "1.0",
+  "description": "A simple Chrome extension template built with React and Vite",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "My Chrome Extension"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*"
+  ]
+}
