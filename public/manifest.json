@@ -7,7 +7,7 @@
     "default_title": "Open Side Panel"
   },
   "background": {
-    "service_worker": "src/background.js",
+    "service_worker": "src/background.ts",
     "type": "module"
   },
   "side_panel": {
@@ -17,6 +17,7 @@
     "sidePanel",
     "storage",
     "tabs",
+    "tabGroups",
     "activeTab"
   ],
   "host_permissions": [

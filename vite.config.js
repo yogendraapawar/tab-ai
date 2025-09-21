@@ -28,5 +28,10 @@ export default defineConfig({
         chunkFileNames: 'assets/chunk-[hash].js'
       }
     }
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
   }
 })

@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, JSX } from 'react'
 import './App.css'
 
-export default function App() {
-  const [chromeApiAvailable, setChromeApiAvailable] = useState(false)
+export default function App(): JSX.Element {
+  const [chromeApiAvailable, setChromeApiAvailable] = useState<boolean>(false)
 
   // Check Chrome API availability on component mount
   useEffect(() => {
-    const checkChromeAPI = () => {
+    const checkChromeAPI = async (): Promise<void> => {
       try {
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.tabs) {
           setChromeApiAvailable(true)
