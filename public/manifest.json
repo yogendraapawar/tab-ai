@@ -4,14 +4,17 @@
   "version": "1.0",
   "description": "A simple Chrome extension template built with React and Vite",
   "action": {
-    "default_popup": "index.html",
-    "default_title": "My Chrome Extension"
+    "default_title": "Open Side Panel"
   },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
+  "side_panel": {
+    "default_path": "index.html"
+  },
   "permissions": [
+    "sidePanel",
     "storage",
     "tabs",
     "activeTab"

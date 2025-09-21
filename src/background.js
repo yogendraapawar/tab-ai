@@ -7,7 +7,22 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log('Extension installed:', details.reason);
 });
 
-// Handle messages from popup or content scripts
+// Handle extension button click - open side panel
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  } catch (error) {
+    console.error('Failed to open side panel:', error);
+    // Fallback: try to open side panel for current window
+    try {
+      await chrome.sidePanel.open({ tabId: tab.id });
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+    }
+  }
+});
+
+// Handle messages from side panel or content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received:', request);
 
