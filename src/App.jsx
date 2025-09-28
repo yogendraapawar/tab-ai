@@ -1,12 +1,13 @@
-import { useState, useEffect, JSX } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
+import { extract_tab_data } from './utils/tabUtils'
 
-export default function App(): JSX.Element {
-  const [chromeApiAvailable, setChromeApiAvailable] = useState<boolean>(false)
+export default function App() {
+  const [chromeApiAvailable, setChromeApiAvailable] = useState(false)
 
   // Check Chrome API availability on component mount
   useEffect(() => {
-    const checkChromeAPI = async (): Promise<void> => {
+    const checkChromeAPI = async () => {
       try {
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.tabs) {
           setChromeApiAvailable(true)
@@ -22,6 +23,7 @@ export default function App(): JSX.Element {
     }
 
     checkChromeAPI()
+    extract_tab_data()
   }, [])
 
   return (
