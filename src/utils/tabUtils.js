@@ -6,7 +6,7 @@ function isExtractableTab(tab) {
 
   // Skip Chrome internal pages
   if (tab.url.startsWith('chrome://') ||
-      tab.url.startsWith('chrome-extension://')) {
+    tab.url.startsWith('chrome-extension://')) {
     return false;
   }
 
@@ -112,48 +112,64 @@ export async function extractTabDetails(tabId) {
   });
 }
 
-// Content extraction script (runs in page context)
 function extractPageContent() {
-  const mainContent = document.querySelector('main, article, .content, .main-content, .post-content')?.innerText || '';
-  const bodyText = document.body.innerText || '';
-  const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map(h => h.textContent?.trim()).filter(Boolean);
-  const paragraphs = Array.from(document.querySelectorAll('p')).slice(0, 15).map(p => p.textContent?.trim()).filter(Boolean);
+  const mainContentEl = document.querySelector(
+    'main, article, [role="main"], .main-content, .content, .post-content, .entry-content, #main, #content'
+  );
+  const mainContent = mainContentEl?.innerText || '';
+
+  const meta = {
+    description: document.querySelector('meta[name="description"]')?.content || '',
+    keywords: document.querySelector('meta[name="keywords"]')?.content || '',
+    ogDescription: document.querySelector('meta[property="og:description"]')?.content || ''
+  };
+
+  const junkHeadings = ["navigation", "menu", "related", "footer", "share"];
+  const headings = Array.from(document.querySelectorAll("h1, h2"))
+    .map(h => h.textContent?.trim())
+    .filter(h => h && !junkHeadings.some(j => h.toLowerCase().includes(j)));
+
+  const paragraphs = Array.from(document.querySelectorAll("p"))
+    .map(p => p.textContent?.trim())
+    .filter(p => p && p.length > 30)
+    .slice(0, 10);
+
+  const truncateText = (text, maxWords = 400) =>
+    text.split(/\s+/).slice(0, maxWords).join(" ");
 
   const allText = [
     document.title,
-    ...headings,
-    ...paragraphs.slice(0, 8),
-    mainContent.substring(0, 1500)
-  ].join(' ').replace(/\s+/g, ' ').trim();
+    meta.description,
+    ...headings.slice(0, 3),
+    ...paragraphs.slice(0, 5),
+    truncateText(mainContent, 400)
+  ].join(" ").replace(/\s+/g, " ").trim();
 
   return {
     title: document.title,
     url: window.location.href,
     domain: window.location.hostname,
     content: {
-      text: allText.substring(0, 3000),
-      headings: headings,
-      paragraphs: paragraphs.slice(0, 10),
-      mainContent: mainContent.substring(0, 2000)
+      text: allText,
+      headings,
+      paragraphs,
+      mainContent: truncateText(mainContent, 500)
     },
-    meta: {
-      description: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
-      keywords: document.querySelector('meta[name="keywords"]')?.getAttribute('content') || '',
-      ogDescription: document.querySelector('meta[property="og:description"]')?.getAttribute('content') || ''
-    },
+    meta,
     context: {
       hasCode: document.querySelectorAll('code, pre').length > 0,
       hasImages: document.querySelectorAll('img').length,
       hasVideo: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length > 0,
       hasForms: document.querySelectorAll('form').length,
       hasTables: document.querySelectorAll('table').length > 0,
-      contentLength: bodyText.length,
+      contentLength: allText.length,
       headingCount: headings.length,
       paragraphCount: paragraphs.length
     },
     timestamp: Date.now()
   };
 }
+
 
 // Main data collection function
 export async function collectAllTabsData() {
