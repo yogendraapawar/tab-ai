@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { extract_tab_data } from './utils/tabUtils'
+import { collectAllTabsData } from './utils/tabUtils'
 
 export default function App() {
   const [chromeApiAvailable, setChromeApiAvailable] = useState(false)
@@ -23,7 +23,27 @@ export default function App() {
     }
 
     checkChromeAPI()
-    extract_tab_data()
+
+    // Get all tabs data using message passing
+    const getAllTabsData = async () => {
+      try {
+        console.log('Sending GET_ALL_TABS_DATA message...');
+        const response = await chrome.runtime.sendMessage({ type: 'GET_ALL_TABS_DATA' });
+        console.log('Received response:', response);
+
+        if (response?.tabsData) {
+          console.log('All tabs data:', response.tabsData);
+        } else if (response?.error) {
+          console.error('Background script error:', response.error);
+        } else {
+          console.log('No tabs data in response');
+        }
+      } catch (error) {
+        console.error('Error getting tabs data:', error);
+      }
+    }
+
+    getAllTabsData()
   }, [])
 
   return (
