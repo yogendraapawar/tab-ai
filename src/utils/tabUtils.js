@@ -156,16 +156,16 @@ function extractPageContent() {
       mainContent: truncateText(mainContent, 500)
     },
     meta,
-    context: {
-      hasCode: document.querySelectorAll('code, pre').length > 0,
-      hasImages: document.querySelectorAll('img').length,
-      hasVideo: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length > 0,
-      hasForms: document.querySelectorAll('form').length,
-      hasTables: document.querySelectorAll('table').length > 0,
-      contentLength: allText.length,
-      headingCount: headings.length,
-      paragraphCount: paragraphs.length
-    },
+    // context: {
+      // hasCode: document.querySelectorAll('code, pre').length > 0,
+      // hasImages: document.querySelectorAll('img').length,
+      // hasVideo: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length > 0,
+      // hasForms: document.querySelectorAll('form').length,
+      // hasTables: document.querySelectorAll('table').length > 0,
+      // contentLength: allText.length,
+      // headingCount: headings.length,
+      // paragraphCount: paragraphs.length
+    // },
     timestamp: Date.now()
   };
 }
