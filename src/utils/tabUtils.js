@@ -129,20 +129,10 @@ function extractPageContent() {
     .map(h => h.textContent?.trim())
     .filter(h => h && !junkHeadings.some(j => h.toLowerCase().includes(j)));
 
-  // const paragraphs = Array.from(document.querySelectorAll("p"))
-  //   .map(p => p.textContent?.trim())
-  //   .filter(p => p && p.length > 30)
-  //   .slice(0, 10);
   const paragraphs = Array.from(document.querySelectorAll("p"))
     .map(p => p.textContent?.trim())
     .filter(p => p && p.length > 30)
-    .slice(0, 5)
-    .map(p =>
-      p
-        .replace(/\s+/g, "")          // replace newlines, tabs, multiple spaces with a single space
-        .replace(/[^\w\s.,!?'-]/g, "") // remove special characters except basic punctuation
-        .trim()
-    );
+    .slice(0, 5);
 
   const truncateText = (text, maxWords = 400) =>
     text.split(/\s+/).slice(0, maxWords).join(" ");
@@ -167,14 +157,14 @@ function extractPageContent() {
     },
     meta,
     // context: {
-    // hasCode: document.querySelectorAll('code, pre').length > 0,
-    // hasImages: document.querySelectorAll('img').length,
-    // hasVideo: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length > 0,
-    // hasForms: document.querySelectorAll('form').length,
-    // hasTables: document.querySelectorAll('table').length > 0,
-    // contentLength: allText.length,
-    // headingCount: headings.length,
-    // paragraphCount: paragraphs.length
+      // hasCode: document.querySelectorAll('code, pre').length > 0,
+      // hasImages: document.querySelectorAll('img').length,
+      // hasVideo: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length > 0,
+      // hasForms: document.querySelectorAll('form').length,
+      // hasTables: document.querySelectorAll('table').length > 0,
+      // contentLength: allText.length,
+      // headingCount: headings.length,
+      // paragraphCount: paragraphs.length
     // },
     timestamp: Date.now()
   };
