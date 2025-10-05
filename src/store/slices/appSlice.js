@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { processTabsWithAI } from '../../utils/aiModel'
 
 // Async thunk for fetching all tabs data
 export const fetchTabsData = createAsyncThunk(
@@ -12,6 +13,19 @@ export const fetchTabsData = createAsyncThunk(
       }
 
       return response?.tabsData || []
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  }
+)
+
+// Async thunk for AI processing tabs
+export const processTabsWithAIAction = createAsyncThunk(
+  'app/processTabsWithAI',
+  async (tabsData, { rejectWithValue }) => {
+    try {
+      const categorizedTabs = await processTabsWithAI(tabsData)
+      return categorizedTabs
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -100,6 +114,7 @@ export const processTabsWithProgress = createAsyncThunk(
 const initialState = {
   chromeApiAvailable: false,
   tabsData: [],
+  categorizedTabs: null,
   loading: false,
   error: null,
   processing: {
@@ -108,6 +123,10 @@ const initialState = {
     processedTabs: 0,
     currentTab: null,
     progress: 0, // percentage
+  },
+  aiProcessing: {
+    isProcessing: false,
+    error: null,
   },
 }
 
@@ -150,6 +169,15 @@ const appSlice = createSlice({
         progress: 0,
       }
     },
+    setAIProcessing: (state, action) => {
+      state.aiProcessing.isProcessing = action.payload
+    },
+    setAIError: (state, action) => {
+      state.aiProcessing.error = action.payload
+    },
+    setCategorizedTabs: (state, action) => {
+      state.categorizedTabs = action.payload
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -180,6 +208,19 @@ const appSlice = createSlice({
         state.error = action.payload
         state.processing.isProcessing = false
       })
+      .addCase(processTabsWithAIAction.pending, (state) => {
+        state.aiProcessing.isProcessing = true
+        state.aiProcessing.error = null
+      })
+      .addCase(processTabsWithAIAction.fulfilled, (state, action) => {
+        state.aiProcessing.isProcessing = false
+        state.categorizedTabs = action.payload
+        state.aiProcessing.error = null
+      })
+      .addCase(processTabsWithAIAction.rejected, (state, action) => {
+        state.aiProcessing.isProcessing = false
+        state.aiProcessing.error = action.payload
+      })
   },
 })
 
@@ -189,6 +230,9 @@ export const {
   startProcessing,
   updateProcessingProgress,
   finishProcessing,
-  resetProcessing
+  resetProcessing,
+  setAIProcessing,
+  setAIError,
+  setCategorizedTabs
 } = appSlice.actions
 export default appSlice.reducer

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import './App.css'
 import { useAppDispatch, useAppSelector } from './store/hooks'
-import { setChromeApiAvailable, fetchTabsData, processTabsWithProgress } from './store/slices/appSlice'
+import { setChromeApiAvailable, fetchTabsData, processTabsWithProgress, processTabsWithAIAction } from './store/slices/appSlice'
 
 export default function App() {
   const dispatch = useAppDispatch()
-  const { chromeApiAvailable, tabsData, loading, error, processing } = useAppSelector(state => state.app)
+  const { chromeApiAvailable, tabsData, categorizedTabs, loading, error, processing, aiProcessing } = useAppSelector(state => state.app)
 
   // Check Chrome API availability on component mount
   useEffect(() => {
@@ -28,8 +28,14 @@ export default function App() {
   }, [dispatch])
 
   // Manual function to trigger tabs data scan
-  const handleScanTabs = () => {
-    dispatch(processTabsWithProgress())
+  const handleScanTabs = async () => {
+    const result = await dispatch(processTabsWithProgress())
+    
+    // After tabs are scanned, trigger AI processing
+    if (result.payload && result.payload.length > 0) {
+      console.log('🚀 Starting AI processing for', result.payload.length, 'tabs...')
+      dispatch(processTabsWithAIAction(result.payload))
+    }
   }
 
   // Log tabs data when it changes
@@ -38,6 +44,13 @@ export default function App() {
       console.log('All tabs data from Redux:', tabsData)
     }
   }, [tabsData])
+
+  // Log categorized tabs when available
+  useEffect(() => {
+    if (categorizedTabs) {
+      console.log('🎯 Categorized tabs from AI:', categorizedTabs)
+    }
+  }, [categorizedTabs])
 
   return (
     <div className="extension-popup">
@@ -76,6 +89,46 @@ export default function App() {
             </div>
           )}
 
+          {aiProcessing.isProcessing && (
+            <div className="ai-processing-status">
+              <h3>🤖 AI Processing Tabs...</h3>
+              <p>Categorizing and summarizing your tabs</p>
+            </div>
+          )}
+
+          {aiProcessing.error && (
+            <div className="ai-error">
+              <p>❌ AI Processing Error: {aiProcessing.error}</p>
+            </div>
+          )}
+
+          {categorizedTabs && (
+            <div className="categorized-tabs">
+              <h3>📊 AI-Categorized Tabs</h3>
+              <div className="categories-container">
+                {Object.entries(categorizedTabs).map(([categoryName, categoryData]) => (
+                  <div key={categoryName} className="category-card">
+                    <h4>{categoryName}</h4>
+                    <p className="category-summary">{categoryData.summary}</p>
+                    <div className="category-tabs">
+                      <strong>Tabs ({categoryData.tablist.length}):</strong>
+                      <ul>
+                        {categoryData.tablist.map(tabId => {
+                          const tab = tabsData.find(t => String(t.tabId) === String(tabId))
+                          return (
+                            <li key={tabId}>
+                              {tab?.tabInfo?.title || `Tab ${tabId}`}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {tabsData.length > 0 && (
             <div className="tabs-list">
               <h3>Tabs Data ({tabsData.length})</h3>
@@ -103,9 +156,10 @@ export default function App() {
             <button
               className="scan-button"
               onClick={handleScanTabs}
-              disabled={loading || processing.isProcessing}
+              disabled={loading || processing.isProcessing || aiProcessing.isProcessing}
             >
-              {loading || processing.isProcessing ? 'Scanning...' : 'Scan Tabs'}
+              {loading || processing.isProcessing ? 'Scanning...' : 
+               aiProcessing.isProcessing ? 'AI Processing...' : 'Scan Tabs'}
             </button>
           </div>
         </div>
