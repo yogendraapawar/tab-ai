@@ -1,38 +1,28 @@
 /**
  * AI Model utility for categorizing and summarizing browser tabs
+ * HYBRID: uses Firebase AI Logic Web SDK (hybrid on-device + cloud)
+ *
+ * IMPORTANT:
+ * - Keep your prompt and example exactly as provided below (unchanged).
+ * - Replace firebaseConfig with your project's config.
  */
 
+import { initializeApp } from "firebase/app";
+import {
+  getAI,
+  getGenerativeModel,
+  GoogleAIBackend,
+  InferenceMode,
+} from "firebase/ai";
+import { firebaseConfig } from "../config.js";
+ 
+/* ---------- Module state ---------- */
 let model = null;
+let aiInstance = null;
+let firebaseApp = null;
 
-/**
- * Initialize the AI model with system prompts
- */
-export async function initializeAIModel() {
-  try {
-    console.log('🔍 Step 1: Checking AI availability...');
-
-    // Check if the API is available
-    const availability = await LanguageModel.availability();
-    console.log('Availability status:', availability);
-
-    if (availability === 'no') {
-      console.error('❌ AI is not available in this browser');
-      throw new Error('AI is not available in this browser');
-    }
-
-    if (availability === 'after-download') {
-      console.log('⏳ AI model needs to be downloaded first');
-      // The model will download automatically when you create a session
-    }
-
-    console.log('✅ Step 2: Creating AI session...');
-
-    // Create a session with language specified
-    model = await LanguageModel.create({
-      initialPrompts: [
-        {
-          role: "system",
-          content: `You are TabsAI — an intelligent tab categorizer and summarization assistant for a browser tab manager.
+/* ---------- Your system prompt + user example (left exactly as you provided) ---------- */
+const SYSTEM_PROMPT = `You are TabsAI — an intelligent tab categorizer and summarization assistant for a browser tab manager.
 
     Your task:
     - Receive an array of open browser tabs, each containing:
@@ -89,11 +79,9 @@ export async function initializeAIModel() {
     Before producing output, verify that:
     1. Every tabId from the input array appears once.
     2. The JSON object is syntactically valid.
-    3. Each category includes a non-empty "tablist" and a "summary".`
-        },
-            {
-      role: "user",
-      content: `
+    3. Each category includes a non-empty "tablist" and a "summary".`;
+
+const USER_EXAMPLE = `
 {
   "Financial Intermediation": {
     "tablist": ["1181810563"],
@@ -112,86 +100,180 @@ export async function initializeAIModel() {
     "summary": "GitHub repository for the Tab AI project, a system for tab categorization and summarization."
   }
 }
-`
+`;
+
+/* ---------- Initialize Firebase AI Logic (hybrid generative model) ---------- */
+export async function initializeAIModel() {
+  try {
+    if (model) {
+      return model; // already initialized
     }
-      ]
+
+    console.log("🔧 Initializing Firebase app & AI Logic (hybrid mode)...");
+    // Initialize Firebase app
+    firebaseApp = initializeApp(firebaseConfig);
+
+    // Initialize AI client (use GoogleAIBackend; SDK will route on-device vs cloud as configured)
+    aiInstance = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+
+    // Create a GenerativeModel configured to prefer on-device inference but fallback to cloud
+    model = getGenerativeModel(aiInstance, {
+      mode: InferenceMode.PREFER_ON_DEVICE,
+      inCloudParams: {
+        model: "gemini-2.5-flash-lite",
+        temperature: 0.6,
+        topK: 3
+      },
+      onDeviceParams: {
+        createOptions: {
+           temperature: 0.6,
+           topK: 3
+    }
+      }
     });
 
-    console.log('✅ AI model initialized successfully');
+    console.log("✅ Hybrid GenerativeModel created (PREFER_ON_DEVICE).");
     return model;
-  } catch (error) {
-    console.error('❌ Error initializing AI model:', error.message);
-    console.error(error);
-    throw error;
+  } catch (err) {
+    console.error("❌ initializeAIModel failed:", err);
+    model = null;
+    throw err;
   }
 }
 
-/**
- * Format tabs data for AI processing
- * @param {Array} tabs - Array of tab objects from Redux state
- * @returns {Array} Formatted tabs array
- */
+function cleanAndTrimForModel(tabData, maxChars = 3000) {
+  let text = "";
+  if (tabData.pageData && tabData.pageData.text) {
+    text = tabData.pageData.text;
+  } else if (tabData.pageData && tabData.pageData.mainContent) {
+    text = tabData.pageData.mainContent;
+  }
+  // fallback to description
+  if (!text || text.length < 50) {
+    text = tabData.pageData?.meta?.description || "";
+  }
+  // clean
+  text = text
+    .replace(/[\r\n]+/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.length > maxChars) {
+    // simple chunking: take first + last
+    const half = Math.floor(maxChars / 2);
+    const start = text.slice(0, half);
+    const end = text.slice(text.length - half);
+    text = `${start} … ${end}`;
+  }
+  return text;
+}
+
+/* ---------- Format tabs (keeps same as your original function) ---------- */
 export function formatTabs(tabs) {
-  return tabs.map(tab => ({
+  return tabs.map((tab) => ({
     tabId: String(tab.tabId),
     title: tab.tabInfo?.title || tab.pageData?.title || "",
     url: tab.tabInfo?.url || tab.pageData?.url || "",
-    description: tab.pageData?.meta?.description || tab.pageData?.meta?.ogDescription || ""
+    description:
+      tab.pageData?.meta?.description || tab.pageData?.meta?.ogDescription || "",
+    textSnippet: cleanAndTrimForModel(tab, 3000)
   }));
 }
 
-/**
- * Process tabs with AI to categorize and summarize them
- * @param {Array} tabsData - Array of tabs from Redux state
- * @returns {Object} Categorized tabs response from AI
- */
+/* ---------- Main: process tabs using hybrid model ---------- */
 export async function processTabsWithAI(tabsData) {
   try {
-    // Initialize model if not already initialized
+    const formattedTabs = formatTabs(tabsData);
+    const inputJSON = JSON.stringify(formattedTabs);
+
+    // Ensure model is initialized
     if (!model) {
       await initializeAIModel();
     }
 
-    console.log('📊 Formatting tabs data for AI...');
-    const formattedTabs = formatTabs(tabsData);
-    const data = JSON.stringify(formattedTabs);
-
-    console.log('🤖 Sending data to AI model...');
-    console.log('Input data:', data);
-
-    const response = await model.prompt(data);
-    console.log('✅ AI response received:', response);
-
-    // Clean response to remove any markdown formatting
-    let cleanResponse = response.trim();
-
-    // Remove markdown code blocks if present
-    if (cleanResponse.startsWith('```json')) {
-      cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```\s*$/, '');
-    } else if (cleanResponse.startsWith('```')) {
-      cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```\s*$/, '');
+    if (!model) {
+      throw new Error("AI model initialization failed (no model available).");
     }
 
-    // Parse the JSON response
-    const categorizedTabs = JSON.parse(cleanResponse);
-    return categorizedTabs;
+    // Build the prompt: keep system prompt + example exactly, then include the input JSON
+    const prompt = `${SYSTEM_PROMPT}\n\n${USER_EXAMPLE}\n\n${inputJSON}`;
+
+    console.log("🤖 Sending prompt to hybrid GenerativeModel (SDK will use on-device if available)...");
+    // generateContent accepts an array of parts; for text-only use a single string in an array
+    const result = await model.generateContent([prompt]);
+
+    // According to the docs, result.response.text() yields the output text
+    let responseText = "";
+    try {
+      const resp = result?.response;
+      if (resp && typeof resp.text === "function") {
+        responseText = resp.text();
+      } else if (resp && resp?.candidates && resp.candidates[0]) {
+        // fallback shape
+        responseText =
+          resp.candidates[0]?.content?.parts?.[0]?.text ??
+          JSON.stringify(resp.candidates[0]);
+      } else {
+        responseText = String(result);
+      }
+    } catch (e) {
+      console.warn("⚠️ Could not read response.text() — falling back to raw result", e);
+      responseText = JSON.stringify(result);
+    }
+
+    console.log("✅ Raw model response received.");
+    return parseJSONResponse(responseText);
   } catch (error) {
-    console.error('❌ Error processing tabs with AI:', error);
+    console.error("❌ processTabsWithAI error:", error);
     throw error;
   }
 }
 
-/**
- * Destroy the AI model session
- */
-export async function destroyAIModel() {
-  if (model) {
-    try {
-      await model.destroy();
-      model = null;
-      console.log('✅ AI model session destroyed');
-    } catch (error) {
-      console.error('❌ Error destroying AI model:', error);
+/* ---------- Utility: parse JSON possibly wrapped in markdown/code fences ---------- */
+function parseJSONResponse(responseText) {
+  let s = String(responseText || "").trim();
+  if (!s) throw new Error("Empty response from model");
+
+  // strip typical code fences
+  if (s.startsWith("```json")) {
+    s = s.replace(/^```json\s*/, "").replace(/\s*```\s*$/, "");
+  } else if (s.startsWith("```")) {
+    s = s.replace(/^```\s*/, "").replace(/\s*```\s*$/, "");
+  }
+
+  // try to directly parse
+  try {
+    return JSON.parse(s);
+  } catch (err) {
+    // if parsing fails, try extracting first JSON-looking substring
+    const match = s.match(/\{[\s\S]*\}$/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch (err2) {
+        console.error("Failed to parse extracted JSON substring:", err2);
+        throw err;
+      }
     }
+    console.error("Failed to parse model response as JSON:", err);
+    throw err;
+  }
+}
+
+/* ---------- Destroy / cleanup (best-effort) ---------- */
+export async function destroyAIModel() {
+  try {
+    if (model && typeof model.close === "function") {
+      // if SDK provided a close() or similar, call it (best-effort)
+      await model.close();
+    }
+  } catch (e) {
+    console.warn("Failed to gracefully close model:", e);
+  } finally {
+    model = null;
+    aiInstance = null;
+    // Firebase app left in place; no explicit teardown needed in typical web apps
+    console.log("🔚 AI model state cleared");
   }
 }

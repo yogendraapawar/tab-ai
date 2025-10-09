@@ -27,6 +27,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Fallback: try to open side panel for current window
     try {
       if (tab.id) {
+        
         await chrome.sidePanel.open({ tabId: tab.id });
       }
     } catch (fallbackError) {
