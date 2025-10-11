@@ -12,10 +12,10 @@ import {
 import ControlBar from "./components/ControlBar";
 import ClusterView from "./components/ClusterView";
 import DuplicatePanel from "./components/DuplicatePanel";
-import SearchBar from "./components/SearchBar";
 import Settings, { getSettings } from "./components/Settings";
 import AIStatusIndicator from "./components/AIStatusIndicator";
 import TabPanel from "./components/TabPanel";
+import QueryTab from "./components/QueryTab";
 
 import { detectDuplicates } from "./utils/duplicateUtils";
 
@@ -34,9 +34,8 @@ export default function App() {
   // Local UI state
   const [dupThreshold, setDupThreshold] = useState(0.82);
   const [duplicateGroups, setDuplicateGroups] = useState([]);
-  const [searchResults, setSearchResults] = useState([]);
-  const [query, setQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeView, setActiveView] = useState("main"); // "main" or "query"
 
   // Load settings on mount
   useEffect(() => {
@@ -99,45 +98,6 @@ export default function App() {
     }, 50);
   }, [tabsData, dupThreshold]);
 
-  // Search handler (naive semantic: title + summary + url)
-  useEffect(() => {
-    if (!query || query.trim().length === 0) {
-      setSearchResults([]);
-      return;
-    }
-
-    const q = query.trim().toLowerCase();
-    const results = [];
-
-    // Search categorizedTabs summaries first (if available)
-    if (categorizedTabs) {
-      Object.entries(categorizedTabs).forEach(([cat, data]) => {
-        if ((data.summary || "").toLowerCase().includes(q) || cat.toLowerCase().includes(q)) {
-          data.tablist.forEach((id) => {
-            const tab = tabsData.find((t) => String(t.tabId) === String(id));
-            if (tab) results.push(tab);
-          });
-        }
-      });
-    }
-
-    // Fallback search in raw tabs (title, url, text)
-    tabsData.forEach((t) => {
-      const needle = `${t.tabInfo?.title || ""} ${t.tabInfo?.url || ""} ${t.pageData?.content?.text || ""}`.toLowerCase();
-      if (needle.includes(q)) results.push(t);
-    });
-
-    // Deduplicate results
-    const uniq = [];
-    const ids = new Set();
-    for (const r of results) {
-      if (!ids.has(String(r.tabId))) {
-        ids.add(String(r.tabId));
-        uniq.push(r);
-      }
-    }
-    setSearchResults(uniq.slice(0, 50));
-  }, [query, categorizedTabs, tabsData]);
 
   // Close duplicates: given keepId and array of toClose IDs
   const handleCloseDuplicates = async (keepId, toCloseIds) => {
@@ -210,123 +170,137 @@ export default function App() {
 
       <ControlBar
         onScan={handleScanTabs}
-        onOrganize={() => dispatch(processTabsWithAIAction(tabsData))}
+        onAsk={() => setActiveView("query")}
         disabledScan={loading || processing.isProcessing || aiProcessing.isProcessing}
-        disabledOrganize={tabsData.length === 0 || aiProcessing.isProcessing}
-        dupThreshold={dupThreshold}
-        setDupThreshold={setDupThreshold}
+        disabledAsk={tabsData.length === 0}
       />
 
-      <main className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 flex-1 overflow-hidden">
-        <div className="flex flex-col gap-5 overflow-y-auto pr-2">
-          <SearchBar
-            query={query}
-            setQuery={setQuery}
-            results={searchResults}
-            onOpenTab={(tabId) => chrome.tabs.update(Number(tabId), { active: true })}
-          />
-
-          <TabPanel
-            tabs={[
-              {
-                icon: "✨",
-                label: "AI Categorized",
-                badge: categorizedTabs ? Object.keys(categorizedTabs).length : null,
-                content: (
-                  <div className="h-full overflow-y-auto">
-                    {aiProcessing.isProcessing && (
-                      <div className="mb-3 p-3 bg-gradient-to-r from-primary-100/80 to-purple-100/80 rounded-lg text-primary-600 font-semibold text-sm">
-                        ⏳ AI is processing — results will update shortly...
-                      </div>
-                    )}
-                    {categorizedTabs ? (
-                      <ClusterView categorizedTabs={categorizedTabs} tabsData={tabsData} />
-                    ) : (
-                      <div className="text-center py-12 text-slate-400">
-                        <div className="text-6xl mb-4 opacity-50">📊</div>
-                        <div className="font-semibold mb-2 text-lg">No categories yet</div>
-                        <div className="text-sm">Click "✨ Organize (AI)" to categorize your tabs</div>
-                      </div>
-                    )}
-                  </div>
-                )
-              },
-              {
-                icon: "📑",
-                label: "All Tabs",
-                badge: tabCount || null,
-                content: (
-                  <div className="h-full overflow-y-auto">
-                    {tabsData.length === 0 ? (
-                      <div className="text-center py-12 text-slate-400">
-                        <div className="text-6xl mb-4 opacity-50">🗂️</div>
-                        <div className="font-semibold text-lg">No tabs found</div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 pr-2">
-                        {tabsData.map((t) => (
-                          <div key={t.tabId} className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-xl transition-all hover:translate-x-1 hover:shadow-sm hover:border-primary-200">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm text-slate-900 truncate">{t.tabInfo?.title || "Untitled"}</div>
-                              <div className="text-xs text-slate-500 truncate">{t.tabInfo?.url || "No url"}</div>
-                            </div>
-                            <div className="flex gap-2 ml-3">
-                              <button 
-                                onClick={() => chrome.tabs.update(Number(t.tabId), { active: true })}
-                                className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm"
-                              >
-                                Open
-                              </button>
-                              <button 
-                                onClick={() => chrome.tabs.remove(Number(t.tabId))} 
-                                title="Close tab"
-                                className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all hover:-translate-y-0.5 shadow-sm"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-            ]}
-          />
-        </div>
-
-        <aside className="flex flex-col gap-5 overflow-y-auto pr-2">
-          <DuplicatePanel
-            duplicateGroups={duplicateGroups}
-            onCloseDuplicates={handleCloseDuplicates}
-            tabsData={tabsData}
-          />
-
-          <div className="glass-panel rounded-2xl p-4">
-            <h4 className="flex items-center gap-2 mb-3 text-sm font-semibold">
-              <span className="text-lg">⚡</span>
-              Quick Actions
-            </h4>
-            <button
-              onClick={() => {
-                dispatch(fetchTabsData());
-              }}
-              className="w-full mb-2 px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
-            >
-              🔄 Refresh Tabs
-            </button>
-            <button
-              onClick={() => {
-                chrome.tabs.create({ url: "https://developer.chrome.com/docs/ai" });
-              }}
-              className="w-full px-4 py-2 text-sm bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-500 hover:text-white transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
-            >
-              📚 View Docs
-            </button>
+      {activeView === "query" ? (
+        // Query View - Full screen query interface
+        <main className="flex-1 overflow-hidden">
+          <div className="h-full flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-800">Ask About Your Tabs</h2>
+              <button
+                onClick={() => setActiveView("main")}
+                className="px-4 py-2 text-sm bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-all"
+              >
+                ← Back to Main
+              </button>
+            </div>
+            <QueryTab 
+              tabsData={tabsData}
+              categorizedTabs={categorizedTabs}
+              onOpenTab={(tabId) => chrome.tabs.update(Number(tabId), { active: true })}
+            />
           </div>
-        </aside>
-      </main>
+        </main>
+      ) : (
+        // Main View - Original layout
+        <main className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 flex-1 overflow-hidden">
+          <div className="flex flex-col gap-5 overflow-y-auto pr-2">
+            <TabPanel
+              tabs={[
+                {
+                  icon: "✨",
+                  label: "AI Categorized",
+                  badge: categorizedTabs ? Object.keys(categorizedTabs).length : null,
+                  content: (
+                    <div className="h-full overflow-y-auto">
+                      {aiProcessing.isProcessing && (
+                        <div className="mb-3 p-3 bg-gradient-to-r from-primary-100/80 to-purple-100/80 rounded-lg text-primary-600 font-semibold text-sm">
+                          ⏳ AI is processing — results will update shortly...
+                        </div>
+                      )}
+                      {categorizedTabs ? (
+                        <ClusterView categorizedTabs={categorizedTabs} tabsData={tabsData} />
+                      ) : (
+                        <div className="text-center py-12 text-slate-400">
+                          <div className="text-6xl mb-4 opacity-50">📊</div>
+                          <div className="font-semibold mb-2 text-lg">No categories yet</div>
+                          <div className="text-sm">Click "💬 ASK" to query your tabs or scan them first</div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+                {
+                  icon: "📑",
+                  label: "All Tabs",
+                  badge: tabCount || null,
+                  content: (
+                    <div className="h-full overflow-y-auto">
+                      {tabsData.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                          <div className="text-6xl mb-4 opacity-50">🗂️</div>
+                          <div className="font-semibold text-lg">No tabs found</div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pr-2">
+                          {tabsData.map((t) => (
+                            <div key={t.tabId} className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-xl transition-all hover:translate-x-1 hover:shadow-sm hover:border-primary-200">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm text-slate-900 truncate">{t.tabInfo?.title || "Untitled"}</div>
+                                <div className="text-xs text-slate-500 truncate">{t.tabInfo?.url || "No url"}</div>
+                              </div>
+                              <div className="flex gap-2 ml-3">
+                                <button 
+                                  onClick={() => chrome.tabs.update(Number(t.tabId), { active: true })}
+                                  className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm"
+                                >
+                                  Open
+                                </button>
+                                <button 
+                                  onClick={() => chrome.tabs.remove(Number(t.tabId))} 
+                                  title="Close tab"
+                                  className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all hover:-translate-y-0.5 shadow-sm"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+              ]}
+            />
+          </div>
+
+          <aside className="flex flex-col gap-5 overflow-y-auto pr-2">
+            <DuplicatePanel
+              duplicateGroups={duplicateGroups}
+              onCloseDuplicates={handleCloseDuplicates}
+              tabsData={tabsData}
+            />
+
+            <div className="glass-panel rounded-2xl p-4">
+              <h4 className="flex items-center gap-2 mb-3 text-sm font-semibold">
+                <span className="text-lg">⚡</span>
+                Quick Actions
+              </h4>
+              <button
+                onClick={() => {
+                  dispatch(fetchTabsData());
+                }}
+                className="w-full mb-2 px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
+              >
+                🔄 Refresh Tabs
+              </button>
+              <button
+                onClick={() => {
+                  chrome.tabs.create({ url: "https://developer.chrome.com/docs/ai" });
+                }}
+                className="w-full px-4 py-2 text-sm bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-500 hover:text-white transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
+              >
+                📚 View Docs
+              </button>
+            </div>
+          </aside>
+        </main>
+      )}
 
       <footer className="mt-auto pt-4 text-center text-white/80 text-xs font-medium">
         <small>TabSense — Built with Chrome AI • Hybrid mode available</small>

@@ -52,7 +52,8 @@ class DSU {
 }
 
 /**
- * detectDuplicates(items, threshold)
+ * detectDupl
+ * icates(items, threshold)
  * items: [{ tabId, text, title, url }]
  * threshold: cosine similarity threshold (0..1)
  * returns: [{ ids: [...tabId], avgScore }]
