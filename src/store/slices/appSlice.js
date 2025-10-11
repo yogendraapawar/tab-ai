@@ -178,6 +178,23 @@ const appSlice = createSlice({
     setCategorizedTabs: (state, action) => {
       state.categorizedTabs = action.payload
     },
+    moveTabBetweenCategories: (state, action) => {
+      const { tabId, fromCategory, toCategory } = action.payload
+      if (!state.categorizedTabs) return
+
+      // Remove tab from source category
+      if (state.categorizedTabs[fromCategory]) {
+        const tablist = state.categorizedTabs[fromCategory].tablist
+        state.categorizedTabs[fromCategory].tablist = tablist.filter(id => id !== tabId)
+      }
+
+      // Add tab to target category
+      if (state.categorizedTabs[toCategory]) {
+        if (!state.categorizedTabs[toCategory].tablist.includes(tabId)) {
+          state.categorizedTabs[toCategory].tablist.push(tabId)
+        }
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -233,6 +250,7 @@ export const {
   resetProcessing,
   setAIProcessing,
   setAIError,
-  setCategorizedTabs
+  setCategorizedTabs,
+  moveTabBetweenCategories
 } = appSlice.actions
 export default appSlice.reducer

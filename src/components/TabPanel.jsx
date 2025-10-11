@@ -13,20 +13,20 @@ export default function TabPanel({ tabs, defaultTab = 0 }) {
             key={index}
             onClick={() => setActiveTab(index)}
             className={`
-              px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2
+              px-3 py-2 rounded-lg font-semibold text-xs transition-all duration-200 flex items-center gap-1.5
               ${activeTab === index
                 ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-md shadow-primary-500/30'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }
             `}
           >
-            <span className="text-lg">{tab.icon}</span>
+            <span className="text-xs">{tab.icon}</span>
             <span>{tab.label}</span>
             {tab.badge && (
               <span className={`
-                px-2 py-0.5 rounded-full text-xs font-bold
-                ${activeTab === index 
-                  ? 'bg-white/20 text-white' 
+                px-1.5 py-0.5 rounded-full text-[10px] font-bold
+                ${activeTab === index
+                  ? 'bg-white/20 text-white'
                   : 'bg-primary-100 text-primary-600'
                 }
               `}>
@@ -44,4 +44,3 @@ export default function TabPanel({ tabs, defaultTab = 0 }) {
     </div>
   );
 }
-

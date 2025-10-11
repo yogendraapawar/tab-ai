@@ -2,30 +2,37 @@
 import React from "react";
 
 export default function ControlBar({
-  onScan,
+  onHome,
   onAsk,
-  disabledScan,
-  disabledAsk
+  activeView
 }) {
+  const isHomeActive = activeView === "main";
+  const isAskActive = activeView === "query";
+
   return (
     <div className="glass-panel flex items-center justify-between gap-4 p-4 rounded-2xl">
-      <div className="flex gap-3 flex-1">
-        <button 
-          onClick={onScan} 
-          disabled={disabledScan}
-          className="px-5 py-2.5 bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+      <div className="flex gap-2 flex-1">
+        <button
+          onClick={onHome}
+          className={`flex-1 px-5 py-3 rounded-xl font-semibold text-sm transition-all ${
+            isHomeActive
+              ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg shadow-primary-500/30 scale-105'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:-translate-y-0.5'
+          }`}
         >
-          🔍 Scan Tabs
+          🏠 Home
         </button>
-        <button 
-          onClick={onAsk} 
-          disabled={disabledAsk}
-          className="px-5 py-2.5 bg-primary-100 text-primary-600 rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5 hover:bg-primary-500 hover:text-white hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+        <button
+          onClick={onAsk}
+          className={`flex-1 px-5 py-3 rounded-xl font-semibold text-sm transition-all ${
+            isAskActive
+              ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-lg shadow-primary-500/30 scale-105'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:-translate-y-0.5'
+          }`}
         >
           💬 ASK
         </button>
       </div>
-
     </div>
   );
 }
