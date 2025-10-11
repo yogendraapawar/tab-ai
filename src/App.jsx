@@ -7,7 +7,8 @@ import {
   processTabsWithProgress,
   processTabsWithAIAction,
   fetchTabsData,
-  moveTabBetweenCategories
+  moveTabBetweenCategories,
+  removeTab
 } from "./store/slices/appSlice";
 
 import ControlBar from "./components/ControlBar";
@@ -61,6 +62,23 @@ export default function App() {
     };
     checkChromeAPI();
   }, [dispatch]);
+
+  // Listen for tab closures and update state
+  useEffect(() => {
+    if (!chromeApiAvailable) return;
+
+    const handleTabRemoved = (tabId) => {
+      dispatch(removeTab(tabId));
+    };
+
+    // Add listener for tab removal
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+
+    // Cleanup listener on unmount
+    return () => {
+      chrome.tabs.onRemoved.removeListener(handleTabRemoved);
+    };
+  }, [chromeApiAvailable, dispatch]);
 
   // Action: Scan tabs (progress) -> then run AI processing
   const handleScanTabs = async () => {

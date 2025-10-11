@@ -195,6 +195,21 @@ const appSlice = createSlice({
         }
       }
     },
+    removeTab: (state, action) => {
+      const tabId = String(action.payload)
+
+      // Remove from tabsData
+      state.tabsData = state.tabsData.filter(tab => String(tab.tabId) !== tabId)
+
+      // Remove from categorizedTabs
+      if (state.categorizedTabs) {
+        Object.keys(state.categorizedTabs).forEach(category => {
+          if (state.categorizedTabs[category].tablist) {
+            state.categorizedTabs[category].tablist = state.categorizedTabs[category].tablist.filter(id => String(id) !== tabId)
+          }
+        })
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -251,6 +266,7 @@ export const {
   setAIProcessing,
   setAIError,
   setCategorizedTabs,
-  moveTabBetweenCategories
+  moveTabBetweenCategories,
+  removeTab
 } = appSlice.actions
 export default appSlice.reducer
