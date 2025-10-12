@@ -22,123 +22,171 @@ let aiInstance = null;
 let firebaseApp = null;
 
 /* ---------- Your system prompt + user example (left exactly as you provided) ---------- */
-const SYSTEM_PROMPT = `You are TabsAI — an intelligent tab categorizer and summarization assistant for a browser tab manager.
+const SYSTEM_PROMPT = `You are TabsAI — an intelligent browser tab categorization and summarization assistant.
 
-    Your task:
-    - Receive an array of open browser tabs, each containing:
-      { tabId, title, url, metadata, and pageContent }.
-    - Analyze all tabs and group them into meaningful thematic categories.
-    - Every tab **must** belong to exactly one category — no tabId should ever be omitted.
-    - Each category must include:
-      1. A human-readable category name (e.g., "Development Tools", "AI Research", "Finance & Markets").
-      2. A "tablist" containing all tabIds assigned to that category.
-      3. A "summary" that briefly (1–2 sentences) describes the theme of that category.
+Your task:
+Given an array of open browser tabs, where each tab includes:
+{ tabId, title, url, metadata, pageContent },
+analyze all tabs and group them into clear, meaningful thematic categories based on their content and purpose.
 
-    **Output format:**
-    Return strictly one valid JSON object structured like this:
-    {
-      "CategoryName1": {
-        "tablist": ["tabId1", "tabId2", ...],
-        "summary": "Brief category summary."
-      },
-      "CategoryName2": {
-        "tablist": ["tabId3", "tabId4", ...],
-        "summary": "Brief category summary."
-      }
-    }
+Rules & Requirements:
 
-    **Rules:**
-    - Do NOT include explanations or markdown outside the JSON.
-    - Category names should be concise, descriptive, and thematic.
-    - Each tabId from the input array must appear exactly once in one of the tablists.
-    - If a tab doesn’t clearly fit an existing category, create a new one (e.g., “Miscellaneous” or “Uncategorized”).
-    - Ensure the number of total tabIds across all categories equals the number of tabs in the input.
-    - Summaries should be short, neutral, and informative.
+1. Categorization
 
-    **Example Output:**
-    {
-      "Financial Intermediation": {
-        "tablist": ["1181810563"],
-        "summary": "Financial intermediaries facilitate transactions between investors, brokers, and banks in the stock market."
-      },
-      "Coding & Algorithms": {
-        "tablist": ["1181810564", "1181810565", "1181810566"],
-        "summary": "Tabs focused on coding interview practice, algorithm tutorials, and microservices development."
-      },
-      "AI & Chrome Development": {
-        "tablist": ["1181810569", "1181810570", "1181810571"],
-        "summary": "Resources exploring Chrome's built-in AI features, including summarization APIs and client-side scaling techniques."
-      },
-      "Tab AI Project": {
-        "tablist": ["1181810572"],
-        "summary": "GitHub repository for the Tab AI project, a system for tab categorization and summarization."
-      }
-    }
+* Every tab must belong to exactly one category.
+* No tabId may be skipped, duplicated, or assigned to multiple categories.
+* Categories should be derived from semantic similarity — topic, theme, intent, or context.
 
-    **Validation reminder:**
-    Before producing output, verify that:
-    1. Every tabId from the input array appears once.
-    2. The JSON object is syntactically valid.
-    3. Each category includes a non-empty "tablist" and a "summary".`;
+2. Category Structure
+   Each category must include:
 
-const USER_EXAMPLE = `
+* "tablist" → an array of tabIds grouped under this category.
+* "summary" → a concise 1–2 sentence explanation describing what unites the tabs in that category.
+
+3. Output Format
+   Return only one valid JSON object, structured exactly like this:
+   {
+   "CategoryName1": {
+   "tablist": ["tabId1", "tabId2", ...],
+   "summary": "Brief, neutral summary describing the category’s theme."
+   },
+   "CategoryName2": {
+   "tablist": ["tabId3", "tabId4", ...],
+   "summary": "Brief, neutral summary describing the category’s theme."
+   }
+   }
+
+4. Category Naming
+
+* Category names must be concise, thematic, and human-readable.
+* You are free to create any relevant categories — not limited to predefined examples.
+* Use general labels (e.g., "Miscellaneous", "Uncategorized") only when no clear thematic link exists.
+
+5. Validation Criteria
+
+* Every tabId from the input array appears exactly once across all tablists.
+* Each category has:
+
+  * A non-empty "tablist".
+  * A meaningful "summary".
+* The final output must be valid JSON only, with no explanations, markdown, or text outside the JSON object.
+
+Example Output (for illustration only):
 {
-  "Financial Intermediation": {
-    "tablist": ["1181810563"],
-    "summary": "Financial intermediaries facilitate your transaction in the Stock Market. They are an interconnected system of stock brokers, depositories, banks, etc."
-  },
-  "Coding & Algorithms": {
-    "tablist": ["1181810564", "1181810565", "1181810566"],
-    "summary": "Tabs focused on coding interview practice, algorithm tutorials, and microservices development."
-  },
-  "AI & Chrome Development": {
-    "tablist": ["1181810569", "1181810570", "1181810571"],
-    "summary": "Resources exploring Chrome's built-in AI features, including summarization APIs and client-side scaling techniques."
-  },
-  "Tab AI Project": {
-    "tablist": ["1181810572"],
-    "summary": "GitHub repository for the Tab AI project, a system for tab categorization and summarization."
-  }
+"Financial Intermediation": {
+"tablist": ["1181810563"],
+"summary": "Pages discussing institutions that connect investors, brokers, and banks in financial systems."
+},
+"AI Development Tools": {
+"tablist": ["1181810564", "1181810565"],
+"summary": "Tabs focused on frameworks, APIs, and tools for building and deploying AI models."
+},
+"Market Research": {
+"tablist": ["1181810566", "1181810567"],
+"summary": "Articles and dashboards analyzing business trends, consumer data, and market insights."
 }
+}
+
+Your goal:
+Generate the final categorized JSON output according to these rules, ensuring every tab is represented once and all categories are semantically coherent.
+
+Below is the input JSON:
 `;
 
+
+/* ---------- Get settings from Chrome storage ---------- */
+async function getSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get("tabSenseSettings", (result) => {
+      const defaultSettings = {
+        inferenceMode: "PREFER_ON_DEVICE",
+        cloudModel: "gemini-2.0-flash-exp",
+        temperature: 0.6,
+        topK: 3,
+        maxOutputTokens: 8192,
+      };
+      resolve({ ...defaultSettings, ...result.tabSenseSettings });
+    });
+  });
+}
+
 /* ---------- Initialize Firebase AI Logic (hybrid generative model) ---------- */
-export async function initializeAIModel() {
+export async function initializeAIModel(forceReinit = false) {
   try {
-    if (model) {
+    if (model && !forceReinit) {
       return model; // already initialized
     }
 
-    console.log("🔧 Initializing Firebase app & AI Logic (hybrid mode)...");
-    // Initialize Firebase app
-    firebaseApp = initializeApp(firebaseConfig);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🔧 INITIALIZING AI MODEL");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    
+    // Get user settings
+    const settings = await getSettings();
+    console.log("📋 User Settings:");
+    console.log(`   • Inference Mode: ${settings.inferenceMode}`);
+    console.log(`   • Cloud Model: ${settings.cloudModel}`);
+    console.log(`   • Temperature: ${settings.temperature}`);
+    console.log(`   • Top K: ${settings.topK}`);
+    console.log(`   • Max Output Tokens: ${settings.maxOutputTokens}`);
+
+    // Initialize Firebase app (only once)
+    if (!firebaseApp) {
+      console.log("🔥 Initializing Firebase app...");
+      firebaseApp = initializeApp(firebaseConfig);
+      console.log("✅ Firebase app initialized");
+    }
 
     // Initialize AI client (use GoogleAIBackend; SDK will route on-device vs cloud as configured)
-    aiInstance = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+    if (!aiInstance) {
+      console.log("🤖 Creating AI instance with GoogleAIBackend...");
+      aiInstance = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+      console.log("✅ AI instance created");
+    }
 
-    // Create a GenerativeModel configured to prefer on-device inference but fallback to cloud
+    // Map string mode to InferenceMode enum
+    const modeMap = {
+      "PREFER_ON_DEVICE": InferenceMode.PREFER_ON_DEVICE,
+      "PREFER_CLOUD": InferenceMode.PREFER_CLOUD,
+      "ON_DEVICE_ONLY": InferenceMode.ON_DEVICE_ONLY,
+      "CLOUD_ONLY": InferenceMode.CLOUD_ONLY,
+    };
+    const inferenceMode = modeMap[settings.inferenceMode] || InferenceMode.PREFER_ON_DEVICE;
+
+    console.log("⚙️  Creating GenerativeModel with configuration...");
+    // Create a GenerativeModel with user settings
     model = getGenerativeModel(aiInstance, {
-      mode: InferenceMode.PREFER_ON_DEVICE,
+      mode: inferenceMode,
       inCloudParams: {
-        model: "gemini-2.5-flash-lite",
-        temperature: 0.6,
-        topK: 3
+        model: settings.cloudModel,
+        temperature: settings.temperature,
+        topK: settings.topK,
+        maxOutputTokens: settings.maxOutputTokens,
       },
       onDeviceParams: {
         createOptions: {
-           temperature: 0.6,
-           topK: 3
-    }
+          temperature: settings.temperature,
+          topK: settings.topK,
+          maxOutputTokens: settings.maxOutputTokens,
+        }
       }
     });
 
-    console.log("✅ Hybrid GenerativeModel created (PREFER_ON_DEVICE).");
+    console.log("✅ GenerativeModel created successfully!");
+    console.log(`📍 Mode: ${settings.inferenceMode}`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     return model;
   } catch (err) {
     console.error("❌ initializeAIModel failed:", err);
     model = null;
     throw err;
   }
+}
+
+/* ---------- Reset model (useful when settings change) ---------- */
+export function resetAIModel() {
+  model = null;
+  console.log("🔄 AI Model reset. Will reinitialize on next use.");
 }
 
 function cleanAndTrimForModel(tabData, maxChars = 3000) {
@@ -197,11 +245,55 @@ export async function processTabsWithAI(tabsData) {
     }
 
     // Build the prompt: keep system prompt + example exactly, then include the input JSON
-    const prompt = `${SYSTEM_PROMPT}\n\n${USER_EXAMPLE}\n\n${inputJSON}`;
+    const prompt = `${SYSTEM_PROMPT}\n\n${inputJSON}`;
+    console.log("Prompt:", prompt);
 
-    console.log("🤖 Sending prompt to hybrid GenerativeModel (SDK will use on-device if available)...");
+    // Get current settings to show execution context
+    const settings = await getSettings();
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🚀 STARTING AI PROCESSING");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("📋 Configuration:");
+    console.log(`   • Mode: ${settings.inferenceMode}`);
+    console.log(`   • Cloud Model: ${settings.cloudModel}`);
+    console.log(`   • Temperature: ${settings.temperature}`);
+    console.log(`   • Top K: ${settings.topK}`);
+    console.log(`   • Max Tokens: ${settings.maxOutputTokens}`);
+    console.log(`   • Tabs to Process: ${tabsData.length}`);
+    console.log(`   • Prompt Size: ${prompt.length} characters`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    const startTime = performance.now();
+    console.log("⏱️  Starting generateContent() call...");
+    console.log("🤖 Sending to AI model (SDK will route based on mode)...");
+    
     // generateContent accepts an array of parts; for text-only use a single string in an array
     const result = await model.generateContent([prompt]);
+    
+    const endTime = performance.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log(`✅ AI PROCESSING COMPLETE in ${duration}s`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Try to detect which backend was used
+    console.log("📊 Response Details:");
+    if (result?.response) {
+      console.log(`   • Has Response: ✓`);
+      console.log(`   • Candidates: ${result.response.candidates?.length || 0}`);
+      
+      // Try to detect execution location
+      const metadata = result.response.metadata || result.metadata;
+      if (metadata) {
+        console.log("   • Metadata:", metadata);
+      }
+      
+      // Check for on-device indicators
+      if (result.onDevice !== undefined) {
+        console.log(`   • Executed: ${result.onDevice ? '📱 ON-DEVICE' : '☁️  CLOUD'}`);
+      }
+    }
 
     // According to the docs, result.response.text() yields the output text
     let responseText = "";
@@ -222,8 +314,16 @@ export async function processTabsWithAI(tabsData) {
       responseText = JSON.stringify(result);
     }
 
-    console.log("✅ Raw model response received.");
-    return parseJSONResponse(responseText);
+    console.log(`   • Response Length: ${responseText.length} characters`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🔍 Parsing JSON response...");
+    
+    const parsed = parseJSONResponse(responseText);
+    const categoryCount = Object.keys(parsed).length;
+    console.log(`✅ Successfully parsed ${categoryCount} categories`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    return parsed;
   } catch (error) {
     console.error("❌ processTabsWithAI error:", error);
     throw error;
@@ -277,3 +377,4 @@ export async function destroyAIModel() {
     console.log("🔚 AI model state cleared");
   }
 }
+

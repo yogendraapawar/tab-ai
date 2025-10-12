@@ -20,6 +20,7 @@
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.2.0",
     "@eslint/js": "^9.35.0",
+    "@tailwindcss/postcss": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.2",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.35.0",
