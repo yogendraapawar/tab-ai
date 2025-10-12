@@ -15,7 +15,7 @@ import {
   InferenceMode,
 } from "firebase/ai";
 import { firebaseConfig } from "../config.js";
- 
+
 /* ---------- Module state ---------- */
 let model = null;
 let aiInstance = null;
@@ -29,18 +29,24 @@ Given an array of open browser tabs, where each tab includes:
 { tabId, title, url, metadata, pageContent },
 analyze all tabs and group them into clear, meaningful thematic categories based on their content and purpose.
 
+🚨 CRITICAL RULE - ONE TAB, ONE CATEGORY:
+Each unique tab (tabId) MUST appear in EXACTLY ONE category - never in multiple categories.
+A tabId appearing in more than one category is strictly forbidden and will cause errors.
+
 Rules & Requirements:
 
-1. Categorization
+1. Categorization (STRICT ONE-TO-ONE MAPPING)
 
-* Every tab must belong to exactly one category.
+* Every tab must belong to EXACTLY ONE category - NO EXCEPTIONS.
 * No tabId may be skipped, duplicated, or assigned to multiple categories.
+* If a tab could fit multiple themes, choose the SINGLE MOST RELEVANT category.
 * Categories should be derived from semantic similarity — topic, theme, intent, or context.
+* DO NOT duplicate any tabId across different categories.
 
 2. Category Structure
    Each category must include:
 
-* "tablist" → an array of tabIds grouped under this category.
+* "tablist" → an array of UNIQUE tabIds grouped under this category (NO DUPLICATES).
 * "summary" → a concise 1–2 sentence explanation describing what unites the tabs in that category.
 
 3. Output Format
@@ -48,11 +54,11 @@ Rules & Requirements:
    {
    "CategoryName1": {
    "tablist": ["tabId1", "tabId2", ...],
-   "summary": "Brief, neutral summary describing the category’s theme."
+   "summary": "Brief, neutral summary describing the category's theme."
    },
    "CategoryName2": {
    "tablist": ["tabId3", "tabId4", ...],
-   "summary": "Brief, neutral summary describing the category’s theme."
+   "summary": "Brief, neutral summary describing the category's theme."
    }
    }
 
@@ -62,12 +68,13 @@ Rules & Requirements:
 * You are free to create any relevant categories — not limited to predefined examples.
 * Use general labels (e.g., "Miscellaneous", "Uncategorized") only when no clear thematic link exists.
 
-5. Validation Criteria
+5. Validation Criteria (ENFORCE UNIQUENESS)
 
-* Every tabId from the input array appears exactly once across all tablists.
+* Every tabId from the input array appears EXACTLY ONCE across all tablists (NO DUPLICATES).
+* No tabId should appear in more than one category's tablist.
 * Each category has:
 
-  * A non-empty "tablist".
+  * A non-empty "tablist" with UNIQUE tabIds.
   * A meaningful "summary".
 * The final output must be valid JSON only, with no explanations, markdown, or text outside the JSON object.
 
@@ -120,7 +127,7 @@ export async function initializeAIModel(forceReinit = false) {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("🔧 INITIALIZING AI MODEL");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    
+
     // Get user settings
     const settings = await getSettings();
     console.log("📋 User Settings:");
@@ -266,10 +273,10 @@ export async function processTabsWithAI(tabsData) {
     const startTime = performance.now();
     console.log("⏱️  Starting generateContent() call...");
     console.log("🤖 Sending to AI model (SDK will route based on mode)...");
-    
+
     // generateContent accepts an array of parts; for text-only use a single string in an array
     const result = await model.generateContent([prompt]);
-    
+
     const endTime = performance.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
 
@@ -282,13 +289,13 @@ export async function processTabsWithAI(tabsData) {
     if (result?.response) {
       console.log(`   • Has Response: ✓`);
       console.log(`   • Candidates: ${result.response.candidates?.length || 0}`);
-      
+
       // Try to detect execution location
       const metadata = result.response.metadata || result.metadata;
       if (metadata) {
         console.log("   • Metadata:", metadata);
       }
-      
+
       // Check for on-device indicators
       if (result.onDevice !== undefined) {
         console.log(`   • Executed: ${result.onDevice ? '📱 ON-DEVICE' : '☁️  CLOUD'}`);
@@ -317,12 +324,12 @@ export async function processTabsWithAI(tabsData) {
     console.log(`   • Response Length: ${responseText.length} characters`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("🔍 Parsing JSON response...");
-    
+
     const parsed = parseJSONResponse(responseText);
     const categoryCount = Object.keys(parsed).length;
     console.log(`✅ Successfully parsed ${categoryCount} categories`);
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    
+
     return parsed;
   } catch (error) {
     console.error("❌ processTabsWithAI error:", error);
@@ -377,4 +384,3 @@ export async function destroyAIModel() {
     console.log("🔚 AI model state cleared");
   }
 }
-

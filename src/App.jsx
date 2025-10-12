@@ -16,6 +16,7 @@ import ClusterView from "./components/ClusterView";
 import DuplicatePanel from "./components/DuplicatePanel";
 import Settings, { getSettings } from "./components/Settings";
 import AIStatusIndicator from "./components/AIStatusIndicator";
+import TabScanningIndicator from "./components/TabScanningIndicator";
 import TabPanel from "./components/TabPanel";
 import QueryTab from "./components/QueryTab";
 
@@ -146,6 +147,96 @@ export default function App() {
     }
   };
 
+  // Group tabs using Chrome's native tab groups
+  const handleGroupTabs = async () => {
+    if (!categorizedTabs || Object.keys(categorizedTabs).length === 0) {
+      alert("Please categorize your tabs first using the 'Categorize tabs' button.");
+      return;
+    }
+
+    try {
+      console.log("🔗 Starting tab grouping...");
+      console.log("📊 Categorized tabs structure:", categorizedTabs);
+
+      // Colors available for tab groups
+      const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+      let colorIndex = 0;
+      let groupedCount = 0;
+
+      // Process each category
+      for (const [category, data] of Object.entries(categorizedTabs)) {
+        console.log(`🔍 Processing category "${category}":`, data);
+
+        // Handle different possible structures
+        let tabIds;
+        if (Array.isArray(data)) {
+          tabIds = data;
+        } else if (data && typeof data === 'object' && data.tablist) {
+          tabIds = data.tablist;
+        } else if (data && typeof data === 'object' && data.tabs) {
+          tabIds = data.tabs;
+        } else if (data && typeof data === 'object' && data.tabIds) {
+          tabIds = data.tabIds;
+        } else {
+          console.warn(`⚠️ Unknown structure for category "${category}":`, data);
+          continue;
+        }
+
+        if (!Array.isArray(tabIds) || tabIds.length === 0) {
+          console.warn(`⚠️ No tabs found for category "${category}"`);
+          continue;
+        }
+
+        // Convert tab IDs to numbers
+        const numericIds = tabIds
+          .map(id => {
+            // Handle if id is an object with tabId property
+            if (typeof id === 'object' && id.tabId) {
+              return Number(id.tabId);
+            }
+            return Number(id);
+          })
+          .filter(id => !isNaN(id));
+
+        if (numericIds.length === 0) {
+          console.warn(`⚠️ No valid numeric IDs for category "${category}"`);
+          continue;
+        }
+
+        console.log(`📁 Grouping category "${category}" with ${numericIds.length} tabs:`, numericIds);
+
+        try {
+          // Create a group with these tabs
+          const groupId = await chrome.tabs.group({ tabIds: numericIds });
+
+          // Update the group with a title and color
+          await chrome.tabGroups.update(groupId, {
+            title: category,
+            color: colors[colorIndex % colors.length],
+            collapsed: false
+          });
+
+          groupedCount++;
+          colorIndex++;
+          console.log(`✅ Successfully grouped "${category}" with group ID ${groupId}`);
+        } catch (groupErr) {
+          console.error(`❌ Failed to group category "${category}":`, groupErr);
+        }
+      }
+
+      if (groupedCount > 0) {
+        console.log(`✅ Tab grouping completed! Created ${groupedCount} groups.`);
+        alert(`Successfully grouped ${groupedCount} categories!`);
+      } else {
+        alert("No tabs were grouped. Please check the console for details.");
+      }
+
+    } catch (err) {
+      console.error("❌ Failed to group tabs:", err);
+      alert(`Failed to group tabs: ${err.message}`);
+    }
+  };
+
   // Memoize counts for header
   const tabCount = tabsData?.length || 0;
 
@@ -161,7 +252,7 @@ export default function App() {
           </div>
         )}
         <div className="flex gap-3 items-center">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-primary-400/40 transition-transform hover:scale-105 hover:rotate-[-5deg]">
+          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-primary-400/40">
             TS
           </div>
           <div>
@@ -172,7 +263,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSettingsOpen(true)}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1.5"
             title="Settings"
           >
             ⚙️ Settings
@@ -190,34 +281,40 @@ export default function App() {
       {/* Quick Actions Bar */}
       <div className="glass-panel rounded-xl p-2">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm">⚡</span>
-            <span className="text-xs font-semibold text-slate-700">Quick Actions:</span>
-          </div>
+
           <div className="flex gap-2 flex-1">
-          <button
+            <button
               onClick={() => {
-                dispatch(fetchTabsData());
+                dispatch(processTabsWithProgress());
               }}
-              className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg shadow-sm font-semibold hover:bg-primary-600 transition-colors flex items-center gap-1.5"
             >
               <span>🔄</span>
               <span>Scan tabs</span>
             </button>
             <button
               onClick={handleScanTabs}
-              disabled={aiProcessing.isProcessing}
-              className="px-3 py-1.5 text-xs bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all hover:-translate-y-0.5 shadow-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              disabled={aiProcessing.isProcessing || !tabsData || tabsData.length === 0}
+              className="px-3 py-1.5 text-xs bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg shadow-sm font-semibold hover:from-primary-600 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              title={!tabsData || tabsData.length === 0 ? "Please scan tabs first" : "Categorize tabs with AI"}
             >
               <span>🔍</span>
               <span>Categorize tabs</span>
             </button>
-
+            <button
+              onClick={handleGroupTabs}
+              disabled={!categorizedTabs || Object.keys(categorizedTabs).length === 0}
+              className="px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg shadow-sm font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              title="Create Chrome tab groups from categorized tabs"
+            >
+              <span>📂</span>
+              <span>Group tabs</span>
+            </button>
             <button
               onClick={() => {
                 chrome.tabs.create({ url: "https://developer.chrome.com/docs/ai" });
               }}
-              className="px-3 py-1.5 text-xs bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-500 hover:text-white transition-all hover:-translate-y-0.5 shadow-sm font-semibold flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs bg-primary-100 text-primary-600 rounded-lg shadow-sm font-semibold hover:bg-primary-200 transition-colors flex items-center gap-1.5"
             >
               <span>📚</span>
               <span>View Docs</span>
@@ -302,7 +399,7 @@ export default function App() {
                             ).filter(Boolean);
 
                             return (
-                              <div key={idx} className="bg-gradient-to-br from-red-50/80 to-red-100/50 border border-red-200 rounded-xl p-3.5 transition-all hover:shadow-sm hover:border-red-300">
+                              <div key={idx} className="bg-gradient-to-br from-red-50/80 to-red-100/50 border border-red-200 rounded-xl p-3.5 hover:border-red-300 transition-colors">
                                 <div className="flex justify-between items-center mb-2">
                                   <strong className="text-red-600 text-sm flex items-center gap-2">
                                     <span>🔗</span>
@@ -320,7 +417,7 @@ export default function App() {
                                       href={tab.tabInfo?.url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="block text-sm text-slate-800 no-underline py-1.5 border-b border-dashed border-slate-200 last:border-b-0 transition-colors hover:text-primary-600 flex items-center gap-2"
+                                      className="block text-sm text-slate-800 no-underline py-1.5 border-b border-dashed border-slate-200 last:border-b-0 hover:text-primary-600 transition-colors flex items-center gap-2"
                                     >
                                       <span>📄</span>
                                       {tab.tabInfo?.title || tab.tabInfo?.url}
@@ -338,7 +435,7 @@ export default function App() {
                                     }
                                     handleCloseDuplicates(keep, toClose);
                                   }}
-                                  className="w-full px-3.5 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
+                                  className="w-full px-3.5 py-2 text-sm bg-red-500 text-white rounded-lg shadow-sm font-semibold hover:bg-red-600 transition-colors"
                                 >
                                   🗑️ Close {g.ids.length - 1} duplicate{g.ids.length - 1 !== 1 ? 's' : ''} (Keep Tab {g.ids[0]})
                                 </button>
@@ -364,7 +461,7 @@ export default function App() {
                       ) : (
                         <div className="space-y-2 pr-2">
                           {tabsData.map((t) => (
-                            <div key={t.tabId} className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-xl transition-all hover:translate-x-1 hover:shadow-sm hover:border-primary-200">
+                            <div key={t.tabId} className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-xl hover:border-primary-300 transition-colors">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 {t.tabInfo?.favIconUrl ? (
                                   <img
@@ -384,7 +481,7 @@ export default function App() {
                               <div className="flex gap-2 ml-3">
                                 <button
                                   onClick={() => chrome.tabs.update(Number(t.tabId), { active: true })}
-                                  className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm"
+                                  className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg shadow-sm hover:bg-primary-600 transition-colors"
                                 >
                                   Open
                                 </button>
@@ -394,7 +491,7 @@ export default function App() {
                                     setTimeout(() => dispatch(fetchTabsData()), 300);
                                   }}
                                   title="Close tab"
-                                  className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all hover:-translate-y-0.5 shadow-sm"
+                                  className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg shadow-sm hover:bg-red-600 transition-colors"
                                 >
                                   ✕
                                 </button>
@@ -430,6 +527,14 @@ export default function App() {
 
       {/* AI Status Indicator */}
       <AIStatusIndicator isProcessing={aiProcessing.isProcessing || processing.isProcessing} />
+
+      {/* Tab Scanning Indicator */}
+      <TabScanningIndicator
+        isScanning={processing.isProcessing}
+        progress={processing.progress || 0}
+        totalTabs={tabsData?.length || 0}
+        aiProcessing={aiProcessing.isProcessing}
+      />
     </div>
   );
 }

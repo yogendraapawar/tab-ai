@@ -311,14 +311,14 @@ Answer their question based on the tab information provided.`;
                   setSearchResults(results);
                   console.log("✅ Debug: State updated!");
                 }}
-                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg font-semibold text-xs transition-all hover:bg-slate-200"
+                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg font-semibold text-xs hover:bg-slate-200 transition-colors"
               >
                 🔍 Find
               </button>
               <button
                 type="submit"
                 disabled={!query.trim() || isProcessing || !tabsData?.length}
-                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center gap-2"
+                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg font-semibold text-sm hover:from-primary-600 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isProcessing ? (
                   <>
@@ -361,7 +361,7 @@ Answer their question based on the tab information provided.`;
                 setResponse("");
                 setError("");
               }}
-              className="px-3 py-2 bg-red-100 text-red-600 rounded-lg font-semibold text-xs transition-all hover:bg-red-200"
+              className="px-3 py-2 bg-red-100 text-red-600 rounded-lg font-semibold text-xs hover:bg-red-200 transition-colors"
             >
               🗑️ Clear Results
             </button>
@@ -382,7 +382,7 @@ Answer their question based on the tab information provided.`;
               {searchResults.map((tab, index) => (
                 <div
                   key={tab.tabId || index}
-                  className="flex items-center justify-between p-3 bg-white border-2 border-slate-300 rounded-lg hover:border-primary-500 hover:shadow-lg transition-all cursor-pointer"
+                  className="flex items-center justify-between p-3 bg-white border-2 border-slate-300 rounded-lg cursor-pointer hover:border-primary-400 transition-colors"
                   onClick={() => handleTabClick(tab.tabId)}
                 >
                   <div className="flex-1 min-w-0">
@@ -405,7 +405,7 @@ Answer their question based on the tab information provided.`;
                       e.stopPropagation();
                       handleTabClick(tab.tabId);
                     }}
-                    className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-md font-bold"
+                    className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg shadow-md font-bold hover:bg-primary-600 transition-colors"
                   >
                     Open
                   </button>
