@@ -187,19 +187,54 @@ export default function App() {
         </div>
       </header>
 
-      <ControlBar
-        onHome={() => setActiveView("main")}
-        onAsk={() => setActiveView("query")}
-        activeView={activeView}
-      />
+      {/* Quick Actions Bar */}
+      <div className="glass-panel rounded-xl p-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">⚡</span>
+            <span className="text-xs font-semibold text-slate-700">Quick Actions:</span>
+          </div>
+          <div className="flex gap-2 flex-1">
+          <button
+              onClick={() => {
+                dispatch(fetchTabsData());
+              }}
+              className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold flex items-center gap-1.5"
+            >
+              <span>🔄</span>
+              <span>Scan tabs</span>
+            </button>
+            <button
+              onClick={handleScanTabs}
+              disabled={aiProcessing.isProcessing}
+              className="px-3 py-1.5 text-xs bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all hover:-translate-y-0.5 shadow-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              <span>🔍</span>
+              <span>Categorize tabs</span>
+            </button>
+
+            <button
+              onClick={() => {
+                chrome.tabs.create({ url: "https://developer.chrome.com/docs/ai" });
+              }}
+              className="px-3 py-1.5 text-xs bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-500 hover:text-white transition-all hover:-translate-y-0.5 shadow-sm font-semibold flex items-center gap-1.5"
+            >
+              <span>📚</span>
+              <span>View Docs</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {activeView === "query" ? (
         // Query View - Full screen query interface
         <main className="flex-1 overflow-hidden">
-          <div className="h-full flex flex-col gap-4">
-            <div className="glass-panel rounded-2xl p-4">
-              <h2 className="text-xl font-bold text-slate-800">💬 Ask About Your Tabs</h2>
-            </div>
+          <div className="glass-panel h-full flex flex-col gap-3 rounded-2xl p-4">
+            <ControlBar
+              onHome={() => setActiveView("main")}
+              onAsk={() => setActiveView("query")}
+              activeView={activeView}
+            />
             <QueryTab
               tabsData={tabsData}
               categorizedTabs={categorizedTabs}
@@ -208,10 +243,15 @@ export default function App() {
           </div>
         </main>
       ) : (
-        // Main View - Original layout
-        <main className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 flex-1 overflow-hidden">
-          <div className="flex flex-col gap-5 overflow-y-auto pr-2">
-             <TabPanel
+        // Main View - Full width layout
+        <main className="flex-1 overflow-hidden">
+          <div className="glass-panel flex flex-col gap-3 overflow-y-auto p-4 rounded-2xl h-full">
+            <ControlBar
+              onHome={() => setActiveView("main")}
+              onAsk={() => setActiveView("query")}
+              activeView={activeView}
+            />
+            <TabPanel
               tabs={[
                 {
                   icon: "✨",
@@ -369,38 +409,6 @@ export default function App() {
               ]}
             />
           </div>
-
-          <aside className="flex flex-col gap-5 overflow-y-auto pr-2">
-            <div className="glass-panel rounded-2xl p-4">
-              <h4 className="flex items-center gap-2 mb-3 text-sm font-semibold">
-                <span className="text-lg">⚡</span>
-                Quick Actions
-              </h4>
-              <button
-                onClick={handleScanTabs}
-                disabled={aiProcessing.isProcessing}
-                className="w-full mb-2 px-4 py-2 text-sm bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all hover:-translate-y-0.5 shadow-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                🔍 Scan Tabs
-              </button>
-              <button
-                onClick={() => {
-                  dispatch(fetchTabsData());
-                }}
-                className="w-full mb-2 px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
-              >
-                🔄 Refresh Tabs
-              </button>
-              <button
-                onClick={() => {
-                  chrome.tabs.create({ url: "https://developer.chrome.com/docs/ai" });
-                }}
-                className="w-full px-4 py-2 text-sm bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-500 hover:text-white transition-all hover:-translate-y-0.5 shadow-sm font-semibold"
-              >
-                📚 View Docs
-              </button>
-            </div>
-          </aside>
         </main>
       )}
 

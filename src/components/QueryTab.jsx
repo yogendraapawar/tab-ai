@@ -18,6 +18,19 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
     }
   }, [query]);
 
+  // Debug: Log when search results change
+  useEffect(() => {
+    console.log("🔄 Search results updated:", searchResults.length, "results");
+    if (searchResults.length > 0) {
+      console.log("📋 Search results details:", searchResults.map(r => ({
+        tabId: r.tabId,
+        title: r.tabInfo?.title,
+        score: r.score,
+        matchType: r.matchType
+      })));
+    }
+  }, [searchResults]);
+
   // Universal search function that works for any query
   const findRelevantTabs = (searchQuery) => {
     if (!searchQuery.trim() || !tabsData || tabsData.length === 0) {
@@ -78,17 +91,17 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
             wordMatches++;
           }
         });
-        
+
         if (wordMatches > 0) {
           matchType = `Word Match (${wordMatches}/${queryWords.length} words)`;
         }
       }
 
       // Bonus for multiple word matches
-      const totalMatches = queryWords.filter(word => 
+      const totalMatches = queryWords.filter(word =>
         title.includes(word) || url.includes(word) || content.includes(word)
       ).length;
-      
+
       if (totalMatches === queryWords.length && queryWords.length > 1) {
         score += 5; // Bonus for matching all words
       }
@@ -108,13 +121,13 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
 
-    console.log(`🔍 Found ${results.length} relevant tabs:`, results.map(r => ({ 
-      title: r.tabInfo?.title, 
-      score: r.score, 
+    console.log(`🔍 Found ${results.length} relevant tabs:`, results.map(r => ({
+      title: r.tabInfo?.title,
+      score: r.score,
       matchType: r.matchType,
       url: r.tabInfo?.url
     })));
-    
+
     return results;
   };
 
@@ -132,20 +145,24 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
 
       // Find the most relevant tabs (max 3)
       const relevantTabs = findRelevantTabs(query);
+      console.log(`📊 Setting ${relevantTabs.length} search results to state`);
       setSearchResults(relevantTabs);
 
       if (relevantTabs.length === 0) {
+        console.log("⚠️ No relevant tabs found for query");
         setResponse("I couldn't find any tabs that match your query. Please try a different search term or make sure you have scanned your tabs first.");
         setIsProcessing(false);
         return;
       }
+
+      console.log("✅ Search results set, proceeding with AI processing");
 
       // Clean and prepare tab data for AI
       const cleanedTabs = relevantTabs.map((tab, index) => {
         const title = tab.tabInfo?.title || "Untitled";
         const url = tab.tabInfo?.url || "";
         const rawContent = tab.pageData?.content?.text || tab.pageData?.mainContent || tab.pageData?.meta?.description || "";
-        
+
         // Clean content - remove HTML tags, excessive whitespace, and limit length
         const cleanedContent = rawContent
           .replace(/<[^>]*>/g, ' ') // Remove HTML tags
@@ -153,7 +170,7 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
           .replace(/[^\w\s.,!?;:()-]/g, ' ') // Remove special characters except basic punctuation
           .trim()
           .substring(0, 1500); // Increased to 1500 characters for more context
-        
+
         return {
           id: index + 1,
           title,
@@ -170,7 +187,7 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
       }
 
       // Create focused prompt with clean tab data
-      const tabContext = cleanedTabs.map(tab => 
+      const tabContext = cleanedTabs.map(tab =>
         `[${tab.id}] ${tab.title}
 URL: ${tab.url}
 Content: ${tab.content}`
@@ -239,7 +256,7 @@ Answer their question based on the tab information provided.`;
   // Format response for better display
   const formatResponse = (text) => {
     if (!text) return "";
-    
+
     // Convert markdown-style formatting to HTML-like structure
     let formatted = text
       // Bold text
@@ -254,14 +271,14 @@ Answer their question based on the tab information provided.`;
       .replace(/\n\n/g, '\n\n')
       // Tab references with better styling
       .replace(/\[(\d+)\]/g, '<span class="inline-block px-2 py-1 bg-primary-100 text-primary-600 rounded text-xs font-semibold mr-1">[$1]</span>');
-    
+
     return formatted;
   };
 
   return (
-    <div className="glass-panel rounded-2xl p-5 transition-all hover:shadow-xl flex flex-col h-full">
+    <div className="flex flex-col flex-1 overflow-hidden">
       {/* Query Input */}
-      <div className="mb-4">
+      <div className="mb-4 flex-shrink-0 px-2">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label htmlFor="query" className="block text-sm font-semibold text-slate-700 mb-2">
@@ -290,10 +307,13 @@ Answer their question based on the tab information provided.`;
                   console.log("🔍 Debug: Current query:", query);
                   const results = findRelevantTabs(query);
                   console.log("🔍 Debug: Search results:", results);
+                  console.log("🔍 Debug: Setting search results to state...");
+                  setSearchResults(results);
+                  console.log("✅ Debug: State updated!");
                 }}
                 className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg font-semibold text-xs transition-all hover:bg-slate-200"
               >
-                🔍 Debug
+                🔍 Find
               </button>
               <button
                 type="submit"
@@ -317,7 +337,8 @@ Answer their question based on the tab information provided.`;
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+
         {/* Error Display */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -329,45 +350,50 @@ Answer their question based on the tab information provided.`;
           </div>
         )}
 
-        {/* Response Display */}
-        {response && (
-          <div className="mb-4 p-4 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm">🤖</span>
-              <span className="font-semibold text-slate-700 text-sm">AI Response</span>
-            </div>
-            <div 
-              className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: response }}
-            />
+        {/* Clear Button */}
+        {(searchResults.length > 0 || response) && (
+          <div className="flex justify-end mb-3">
+            <button
+              type="button"
+              onClick={() => {
+                console.log("🗑️ Clearing search results");
+                setSearchResults([]);
+                setResponse("");
+                setError("");
+              }}
+              className="px-3 py-2 bg-red-100 text-red-600 rounded-lg font-semibold text-xs transition-all hover:bg-red-200"
+            >
+              🗑️ Clear Results
+            </button>
           </div>
         )}
 
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <div className="mb-4">
+        {/* Search Results - Show First */}
+        {searchResults.length > 0 ? (
+          <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm">🔍</span>
-              <span className="font-semibold text-slate-700 text-sm">Relevant Tabs</span>
-              <span className="px-2 py-0.5 bg-primary-100 text-primary-600 rounded-full text-xs font-semibold">
+              <span className="text-lg">🔍</span>
+              <span className="font-bold text-slate-800 text-base">Relevant Tabs Found!</span>
+              <span className="px-2 py-1 bg-blue-500 text-white rounded-full text-xs font-bold">
                 {searchResults.length}
               </span>
             </div>
             <div className="space-y-2">
               {searchResults.map((tab, index) => (
                 <div
-                  key={tab.tabId}
-                  className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-lg hover:border-primary-200 transition-all cursor-pointer"
+                  key={tab.tabId || index}
+                  className="flex items-center justify-between p-3 bg-white border-2 border-slate-300 rounded-lg hover:border-primary-500 hover:shadow-lg transition-all cursor-pointer"
                   onClick={() => handleTabClick(tab.tabId)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 bg-primary-100 text-primary-600 rounded text-xs font-semibold">
+                      <span className="px-2 py-1 bg-primary-500 text-white rounded text-xs font-bold">
                         [{index + 1}]
                       </span>
-                      <span className="text-xs text-slate-500">{tab.matchType}</span>
+                      <span className="text-xs text-slate-600 font-semibold">{tab.matchType || 'Match'}</span>
+                      <span className="text-xs text-green-600">Score: {tab.score || 0}</span>
                     </div>
-                    <div className="font-semibold text-sm text-slate-900 truncate">
+                    <div className="font-bold text-sm text-slate-900 truncate">
                       {tab.tabInfo?.title || "Untitled"}
                     </div>
                     <div className="text-xs text-slate-500 truncate">
@@ -379,7 +405,7 @@ Answer their question based on the tab information provided.`;
                       e.stopPropagation();
                       handleTabClick(tab.tabId);
                     }}
-                    className="px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-sm"
+                    className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all hover:-translate-y-0.5 shadow-md font-bold"
                   >
                     Open
                   </button>
@@ -387,10 +413,30 @@ Answer their question based on the tab information provided.`;
               ))}
             </div>
           </div>
+        ) : (
+          isProcessing && (
+            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+              <div className="text-sm text-blue-700">🔍 Searching for relevant tabs...</div>
+            </div>
+          )
+        )}
+
+        {/* Response Display */}
+        {response && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm">🤖</span>
+              <span className="font-semibold text-slate-700 text-sm">AI Response</span>
+            </div>
+            <div
+              className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: response }}
+            />
+          </div>
         )}
 
         {/* Empty State */}
-        {!response && !isProcessing && !error && (
+        {!response && !isProcessing && !error && searchResults.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-slate-400">
               <div className="text-4xl mb-3 opacity-50">💬</div>
