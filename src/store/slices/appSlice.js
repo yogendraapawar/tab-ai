@@ -42,6 +42,7 @@ export const processTabsWithProgress = createAsyncThunk(
 
       // Start processing
       dispatch(startProcessing({ totalTabs: 0 })) // Will be updated when we get tabs
+      const _scanStartTs = Date.now()
 
       // Get tabs first to know total count
       const tabs = await new Promise((resolve) => {
@@ -100,6 +101,11 @@ export const processTabsWithProgress = createAsyncThunk(
         processedCount++
       }
 
+      // Ensure minimum scan duration of 1s
+      const _elapsed = Date.now() - _scanStartTs
+      if (_elapsed < 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 - _elapsed))
+      }
       // Finish processing
       dispatch(finishProcessing())
 
@@ -195,6 +201,17 @@ const appSlice = createSlice({
         }
       }
     },
+    removeCategory: (state, action) => {
+      const category = action.payload
+      if (state.categorizedTabs && state.categorizedTabs[category]) {
+        delete state.categorizedTabs[category]
+      }
+    },
+    removeTabFromCategory: (state, action) => {
+      const { tabId, category } = action.payload
+      if (!state.categorizedTabs || !state.categorizedTabs[category]) return
+      state.categorizedTabs[category].tablist = state.categorizedTabs[category].tablist.filter(id => String(id) !== String(tabId))
+    },
     removeTab: (state, action) => {
       const tabId = String(action.payload)
 
@@ -267,6 +284,8 @@ export const {
   setAIError,
   setCategorizedTabs,
   moveTabBetweenCategories,
+  removeCategory,
+  removeTabFromCategory,
   removeTab
 } = appSlice.actions
 export default appSlice.reducer

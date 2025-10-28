@@ -7,13 +7,16 @@ export default function TabPanel({ tabs, defaultTab = 0 }) {
   return (
     <div className="glass-panel rounded-2xl p-5 transition-all hover:shadow-xl flex flex-col h-full">
       {/* Tab Headers */}
-      <div className="flex gap-2 mb-4 border-b border-slate-200 pb-2">
+      <div
+        className="grid gap-2 mb-4 border-b border-slate-200 pb-2"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
         {tabs.map((tab, index) => (
           <button
             key={index}
             onClick={() => setActiveTab(index)}
             className={`
-              px-3 py-2 rounded-lg font-semibold text-xs transition-all duration-200 flex items-center gap-1.5
+              w-full px-3 py-2 rounded-lg font-semibold text-xs transition-all duration-200 flex items-center justify-center gap-1.5
               ${activeTab === index
                 ? 'bg-gradient-to-r from-primary-500 to-purple-600 text-white shadow-md shadow-primary-500/30'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'

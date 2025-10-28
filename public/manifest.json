@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Extension",
+  "name": "TabSense",
   "version": "1.0",
   "description": "A simple Chrome extension template built with React and Vite",
   "action": {

@@ -5,75 +5,123 @@ import { initializeAIModel } from "../utils/aiModel.js";
 export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
   const [query, setQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [response, setResponse] = useState("");
   const [error, setError] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  // messages: { role: 'user'|'assistant', text?: string, html?: string, reference?: { title, url, tabId, score } }
+  const [messages, setMessages] = useState([]);
   const textareaRef = useRef(null);
+  const chatEndRef = useRef(null);
 
   // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [query]);
 
-  // Debug: Log when search results change
+  // Auto-scroll chat to bottom on new messages
   useEffect(() => {
-    console.log("🔄 Search results updated:", searchResults.length, "results");
-    if (searchResults.length > 0) {
-      console.log("📋 Search results details:", searchResults.map(r => ({
-        tabId: r.tabId,
-        title: r.tabInfo?.title,
-        score: r.score,
-        matchType: r.matchType
-      })));
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [searchResults]);
+  }, [messages]);
 
-  // Universal search function that works for any query
+  // Restore chat from chrome.storage.session to persist until extension closes
+  useEffect(() => {
+    try {
+      if (typeof chrome !== "undefined" && chrome.storage?.session) {
+        chrome.storage.session.get("ts_query_chat", (obj) => {
+          const saved = obj?.ts_query_chat;
+          if (Array.isArray(saved) && saved.length > 0) {
+            setMessages(saved);
+          }
+        });
+      }
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  // Persist chat to chrome.storage.session on every change
+  useEffect(() => {
+    try {
+      if (typeof chrome !== "undefined" && chrome.storage?.session) {
+        chrome.storage.session.set({ ts_query_chat: messages });
+      }
+    } catch {
+      // non-fatal
+    }
+  }, [messages]);
+
+  // Debug: Log tab stats
+  useEffect(() => {
+    console.log("📊 QueryTab mounted. tabsData:", tabsData?.length || 0);
+  }, [tabsData]);
+
+  // Helper: detect if query refers to the active/current tab
+  const mentionsActiveTab = (q) => {
+    const s = (q || "").toLowerCase();
+    return (
+      /\b(current|this|active)\s+(tab|page)\b/.test(s) ||
+      /\bsummar(i[sz]e|yze)\s+(this|current)\b/.test(s) ||
+      /\b(on\s+my\s+tab)\b/.test(s)
+    );
+  };
+
+  // Helper: format response for better display
+  const formatResponse = (text) => {
+    if (!text) return "";
+    let formatted = text
+      // Basic markdown-like formatting
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      // Bullets / numbered lists (keeping line breaks)
+      .replace(/^[\s]*[-*]\s+(.+)$/gm, "• $1")
+      .replace(/^[\s]*(\d+)\.\s+(.+)$/gm, "$1. $2")
+      // Tab references like [1]
+      .replace(
+        /\[(\d+)\]/g,
+        '<span class="inline-block px-2 py-1 bg-primary-100 text-primary-600 rounded text-xs font-semibold mr-1">[$1]</span>'
+      );
+    return formatted;
+  };
+
+  // Universal search function that works for any query (reused for chat context)
   const findRelevantTabs = (searchQuery) => {
-    if (!searchQuery.trim() || !tabsData || tabsData.length === 0) {
+    if (!searchQuery?.trim() || !tabsData || tabsData.length === 0) {
       console.log("🔍 Search: No query or tabs data available");
       return [];
     }
 
-    const query = searchQuery.toLowerCase().trim();
-    const queryWords = query.split(/\s+/).filter(word => word.length > 1);
+    const q = searchQuery.toLowerCase().trim();
+    const queryWords = q.split(/\s+/).filter((word) => word.length > 1);
     const scoredTabs = [];
 
-    console.log(`🔍 Searching for: "${query}" (${queryWords.length} words)`);
-    console.log(`📊 Available tabs: ${tabsData.length}`);
-
-    // Search in all tabs data
     tabsData.forEach((tab, index) => {
       const title = (tab.tabInfo?.title || "").toLowerCase();
       const url = (tab.tabInfo?.url || "").toLowerCase();
-      const content = (tab.pageData?.content?.text || tab.pageData?.mainContent || "").toLowerCase();
+      const content = (
+        tab.pageData?.content?.text ||
+        tab.pageData?.mainContent ||
+        ""
+      ).toLowerCase();
       const description = (tab.pageData?.meta?.description || "").toLowerCase();
 
       let score = 0;
       let matchType = "";
 
-      // Exact query match in title (highest priority)
-      if (title.includes(query)) {
+      if (title.includes(q)) {
         score += 25;
         matchType = "Exact Title Match";
-      }
-      // Exact query match in URL
-      else if (url.includes(query)) {
+      } else if (url.includes(q)) {
         score += 20;
         matchType = "Exact URL Match";
-      }
-      // Exact query match in content
-      else if (content.includes(query)) {
+      } else if (content.includes(q)) {
         score += 15;
         matchType = "Exact Content Match";
-      }
-      // Word-by-word matching
-      else {
+      } else {
         let wordMatches = 0;
-        queryWords.forEach(word => {
+        queryWords.forEach((word) => {
           if (title.includes(word)) {
             score += 8;
             wordMatches++;
@@ -97,13 +145,11 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
         }
       }
 
-      // Bonus for multiple word matches
-      const totalMatches = queryWords.filter(word =>
-        title.includes(word) || url.includes(word) || content.includes(word)
+      const totalMatches = queryWords.filter(
+        (word) => title.includes(word) || url.includes(word) || content.includes(word)
       ).length;
-
       if (totalMatches === queryWords.length && queryWords.length > 1) {
-        score += 5; // Bonus for matching all words
+        score += 5;
       }
 
       if (score > 0) {
@@ -111,74 +157,177 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
           ...tab,
           score,
           matchType,
-          originalIndex: index
+          originalIndex: index,
         });
       }
     });
 
-    // Sort by score and return top 3 most relevant
-    const results = scoredTabs
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
-
-    console.log(`🔍 Found ${results.length} relevant tabs:`, results.map(r => ({
-      title: r.tabInfo?.title,
-      score: r.score,
-      matchType: r.matchType,
-      url: r.tabInfo?.url
-    })));
-
+    const results = scoredTabs.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 3);
     return results;
   };
 
-  // Process query with professional AI assistant
+  // Bookmarks: find relevant bookmarks by query (title/url match)
+  const findRelevantBookmarks = async (searchQuery) => {
+    if (!searchQuery?.trim()) return [];
+    try {
+      if (typeof chrome === "undefined" || !chrome.bookmarks?.search) return [];
+      const results = await new Promise((resolve) => {
+        try {
+          chrome.bookmarks.search(searchQuery, (res) => resolve(res || []));
+        } catch (e) {
+          resolve([]);
+        }
+      });
+      // Filter to only nodes with URL and dedupe same URL
+      const urlSeen = new Set();
+      const items = [];
+      for (const r of results) {
+        if (!r.url) continue;
+        if (urlSeen.has(r.url)) continue;
+        urlSeen.add(r.url);
+        items.push({ id: r.id, title: r.title || r.url, url: r.url });
+        if (items.length >= 5) break;
+      }
+      return items;
+    } catch {
+      return [];
+    }
+  };
+
+  // Try to pull active tab content if user mentions current tab
+  const getActiveTabContextIfRequested = async (searchQuery) => {
+    if (!mentionsActiveTab(searchQuery)) return null;
+    try {
+      if (typeof chrome === "undefined" || !chrome.tabs?.query) return null;
+      const [active] = await new Promise((resolve) => {
+        try {
+          chrome.tabs.query({ active: true, currentWindow: true }, (res) =>
+            resolve(res || [])
+          );
+        } catch (e) {
+          resolve([]);
+        }
+      });
+      if (!active?.id || !active?.url) return null;
+
+      let pageData = null;
+      try {
+        pageData = await new Promise((resolve) => {
+          try {
+            chrome.runtime.sendMessage(
+              { type: "EXTRACT_TAB_DATA", tabId: active.id },
+              (resp) => resolve(resp?.data || null)
+            );
+          } catch (e) {
+            resolve(null);
+          }
+        });
+      } catch {
+        pageData = null;
+      }
+
+      const ctx = {
+        tabId: active.id,
+        tabInfo: {
+          id: active.id,
+          title: active.title || "",
+          url: active.url || "",
+          domain: active.url ? new URL(active.url).hostname : "",
+          windowId: active.windowId,
+          favIconUrl: active.favIconUrl,
+          index: active.index,
+          pinned: active.pinned,
+          active: true,
+          audible: active.audible,
+          mutedInfo: active.mutedInfo,
+          groupId: active.groupId,
+        },
+        pageData: pageData || {
+          meta: {},
+          mainContent: "",
+        },
+        score: 9999,
+        matchType: "Active Tab",
+        originalIndex: -1,
+      };
+      return ctx;
+    } catch (e) {
+      console.warn("Failed to fetch active tab context:", e);
+      return null;
+    }
+  };
+
+  // Clean and prepare tab data for AI
+  const cleanTabsForAI = (relevantTabs) => {
+    return relevantTabs.map((tab, index) => {
+      const title = tab.tabInfo?.title || "Untitled";
+      const url = tab.tabInfo?.url || "";
+      const rawContent =
+        tab.pageData?.content?.text ||
+        tab.pageData?.mainContent ||
+        tab.pageData?.meta?.description ||
+        "";
+
+      const cleanedContent = String(rawContent)
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .replace(/[^\w\s.,!?;:()-]/g, " ")
+        .trim()
+        .substring(0, 1500);
+
+      return {
+        id: index + 1,
+        tabId: tab.tabId,
+        title,
+        url,
+        content: cleanedContent,
+        matchType: tab.matchType || "",
+        score: tab.score || 0,
+      };
+    });
+  };
+
+  // Main submit handler (chat-style)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim() || isProcessing) return;
 
     setIsProcessing(true);
     setError("");
-    setResponse("");
+
+    const userText = query;
+    setQuery("");
+
+    // Add user message
+    setMessages((prev) => [...prev, { role: "user", text: userText }]);
 
     try {
-      console.log(`🔍 Processing query: "${query}"`);
+      console.log(`🔍 Processing query: "${userText}"`);
 
-      // Find the most relevant tabs (max 3)
-      const relevantTabs = findRelevantTabs(query);
-      console.log(`📊 Setting ${relevantTabs.length} search results to state`);
-      setSearchResults(relevantTabs);
+      // Compute relevant tab context
+      let relevantTabs = findRelevantTabs(userText);
 
-      if (relevantTabs.length === 0) {
-        console.log("⚠️ No relevant tabs found for query");
-        setResponse("I couldn't find any tabs that match your query. Please try a different search term or make sure you have scanned your tabs first.");
-        setIsProcessing(false);
-        return;
+      // If asked about current tab, fetch and prioritize it
+      const activeCtx = await getActiveTabContextIfRequested(userText);
+      if (activeCtx) {
+        const exists = relevantTabs.some(
+          (t) => String(t.tabId) === String(activeCtx.tabId)
+        );
+        if (!exists) {
+          relevantTabs = [activeCtx, ...relevantTabs].slice(0, 3);
+        } else {
+          relevantTabs = relevantTabs.map((t) =>
+            String(t.tabId) === String(activeCtx.tabId)
+              ? { ...t, matchType: "Active Tab", score: Math.max(9999, t.score || 0) }
+              : t
+          );
+        }
       }
 
-      console.log("✅ Search results set, proceeding with AI processing");
+      // Related bookmarks context (not rendered, but can inform prompt)
+      const relatedBookmarks = await findRelevantBookmarks(userText);
 
-      // Clean and prepare tab data for AI
-      const cleanedTabs = relevantTabs.map((tab, index) => {
-        const title = tab.tabInfo?.title || "Untitled";
-        const url = tab.tabInfo?.url || "";
-        const rawContent = tab.pageData?.content?.text || tab.pageData?.mainContent || tab.pageData?.meta?.description || "";
-
-        // Clean content - remove HTML tags, excessive whitespace, and limit length
-        const cleanedContent = rawContent
-          .replace(/<[^>]*>/g, ' ') // Remove HTML tags
-          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-          .replace(/[^\w\s.,!?;:()-]/g, ' ') // Remove special characters except basic punctuation
-          .trim()
-          .substring(0, 1500); // Increased to 1500 characters for more context
-
-        return {
-          id: index + 1,
-          title,
-          url,
-          content: cleanedContent,
-          matchType: tab.matchType
-        };
-      });
+      const cleanedTabs = cleanTabsForAI(relevantTabs);
 
       // Initialize AI model
       const model = await initializeAIModel();
@@ -186,36 +335,59 @@ export default function QueryTab({ tabsData, categorizedTabs, onOpenTab }) {
         throw new Error("AI model initialization failed");
       }
 
-      // Create focused prompt with clean tab data
-      const tabContext = cleanedTabs.map(tab =>
-        `[${tab.id}] ${tab.title}
-URL: ${tab.url}
-Content: ${tab.content}`
-      ).join('\n\n');
+      // Build prompt
+      const tabsBlock =
+        cleanedTabs.length > 0
+          ? cleanedTabs
+              .map(
+                (t) => `[${t.id}] ${t.title}
+URL: ${t.url}
+Content: ${t.content}`
+              )
+              .join("\n\n")
+          : "(no tab context available)";
 
-      const prompt = `You are a helpful AI assistant. The user asked: "${query}"
+      const bookmarksBlock =
+        relatedBookmarks.length > 0
+          ? relatedBookmarks
+              .map((b, i) => `(${i + 1}) ${b.title} — ${b.url}`)
+              .join("\n")
+          : "(no related bookmarks)";
 
-Here are the relevant tabs from their browser:
-${tabContext}
+      const intentHints = [];
+      if (/youtube\.com\/watch/.test(cleanedTabs.map((t) => t.url).join(" "))) {
+        intentHints.push(
+          "If the question is about a YouTube video, summarize the key points, structure, and actionable takeaways."
+        );
+      }
+      if (mentionsActiveTab(userText)) {
+        intentHints.push("Prioritize the Active Tab context when answering.");
+      }
+
+      const prompt = `You are a chat assistant focused on the user's browsing context (tabs and bookmarks).
+User asked: "${userText}"
+
+Context — Relevant Tabs:
+${tabsBlock}
+
+Context — Related Bookmarks:
+${bookmarksBlock}
 
 Instructions:
-1. Answer the user's question directly and specifically
-2. Use the tab content to provide detailed, helpful information
-3. Reference tabs with [1], [2], [3] when relevant
-4. Be thorough but concise
-5. Focus on what the user actually asked for
+1) Answer the user's question directly, focusing on the provided tab/bookmark context.
+2) Use tab references like [1], [2], [3] when pulling from specific tabs.
+3) Provide concise yet thorough explanations and, when useful, short bullet steps.
+4) If user asks for similar resources, list a few high-quality links (use Related Bookmarks first if they fit).
+5) If summarization is requested, summarize clearly and extract key points and action items.
+${intentHints.length ? "6) " + intentHints.join(" ") : ""}
 
-Answer their question based on the tab information provided.`;
+Now provide the best possible answer based on the above context.`;
 
-      console.log(`🤖 Sending to AI: ${relevantTabs.length} relevant tabs`);
-      console.log("📋 Tab context being sent:", tabContext.substring(0, 500) + "...");
-
+      console.log(`🤖 Sending to AI with ${cleanedTabs.length} tab(s) and ${relatedBookmarks.length} bookmark(s).`);
       const startTime = performance.now();
       const result = await model.generateContent([prompt]);
       const endTime = performance.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-      console.log(`✅ AI response received in ${duration}s`);
+      console.log(`✅ AI response received in ${((endTime - startTime) / 1000).toFixed(2)}s`);
 
       // Extract and format response
       let responseText = "";
@@ -228,17 +400,37 @@ Answer their question based on the tab information provided.`;
         } else {
           responseText = String(result);
         }
-      } catch (e) {
-        console.warn("Could not read response.text() — falling back to raw result", e);
+      } catch (e2) {
+        console.warn("Could not read response.text() — falling back to raw result", e2);
         responseText = JSON.stringify(result);
       }
 
-      console.log(`📝 Response length: ${responseText.length} characters`);
-
-      // Format the response for better display
       const formattedResponse = formatResponse(responseText);
-      setResponse(formattedResponse);
 
+      // Determine single reference link with highest score (from relevant tabs)
+      let bestRef = null;
+      if (relevantTabs && relevantTabs.length > 0) {
+        let best = relevantTabs[0];
+        for (const t of relevantTabs) {
+          if ((t.score || 0) > (best.score || 0)) best = t;
+        }
+        bestRef = {
+          tabId: best.tabId,
+          title: best?.tabInfo?.title || best?.pageData?.title || best?.tabInfo?.url || "Reference",
+          url: best?.tabInfo?.url || "",
+          score: best.score || 0,
+        };
+      }
+
+      // Append assistant message (AI Response; only one reference link at bottom)
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          html: formattedResponse,
+          reference: bestRef,
+        },
+      ]);
     } catch (err) {
       console.error("Error processing query:", err);
       setError("Failed to process your query. Please try again.");
@@ -251,28 +443,6 @@ Answer their question based on the tab information provided.`;
     if (onOpenTab) {
       onOpenTab(tabId);
     }
-  };
-
-  // Format response for better display
-  const formatResponse = (text) => {
-    if (!text) return "";
-
-    // Convert markdown-style formatting to HTML-like structure
-    let formatted = text
-      // Bold text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      // Italic text
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      // Bullet points
-      .replace(/^[\s]*[-*]\s+(.+)$/gm, '• $1')
-      // Numbered lists
-      .replace(/^[\s]*(\d+)\.\s+(.+)$/gm, '$1. $2')
-      // Line breaks
-      .replace(/\n\n/g, '\n\n')
-      // Tab references with better styling
-      .replace(/\[(\d+)\]/g, '<span class="inline-block px-2 py-1 bg-primary-100 text-primary-600 rounded text-xs font-semibold mr-1">[$1]</span>');
-
-    return formatted;
   };
 
   return (
@@ -289,7 +459,7 @@ Answer their question based on the tab information provided.`;
               id="query"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g., 'What are my work-related tabs?', 'Show me tabs about AI', 'Find shopping websites'..."
+              placeholder="e.g., 'Summarize my current tab', 'Summarize the YouTube video on my tab', 'Provide similar resources', 'Which tabs are about AI?'"
               className="w-full p-3 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
               rows={3}
               disabled={isProcessing}
@@ -297,27 +467,13 @@ Answer their question based on the tab information provided.`;
           </div>
           <div className="flex justify-between items-center">
             <div className="text-xs text-slate-500">
-              {tabsData?.length > 0 ? `${tabsData.length} tabs available` : 'No tabs scanned yet'}
+              {tabsData?.length > 0 ? `${tabsData.length} tabs available` : "No tabs scanned yet"}
             </div>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  console.log("🔍 Debug: All tabs data:", tabsData);
-                  console.log("🔍 Debug: Current query:", query);
-                  const results = findRelevantTabs(query);
-                  console.log("🔍 Debug: Search results:", results);
-                  console.log("🔍 Debug: Setting search results to state...");
-                  setSearchResults(results);
-                  console.log("✅ Debug: State updated!");
-                }}
-                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg font-semibold text-xs hover:bg-slate-200 transition-colors"
-              >
-                🔍 Find
-              </button>
+              {/* 'Find' and 'Clear Chat' removed as requested */}
               <button
                 type="submit"
-                disabled={!query.trim() || isProcessing || !tabsData?.length}
+                disabled={!query.trim() || isProcessing}
                 className="px-4 py-2 bg-gradient-to-r from-primary-500 to-purple-600 text-white rounded-lg font-semibold text-sm hover:from-primary-600 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isProcessing ? (
@@ -326,9 +482,7 @@ Answer their question based on the tab information provided.`;
                     Processing...
                   </>
                 ) : (
-                  <>
-                    🤖 Ask AI
-                  </>
+                  <>🤖 Ask AI</>
                 )}
               </button>
             </div>
@@ -337,8 +491,7 @@ Answer their question based on the tab information provided.`;
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto">
-
+      <div className="flex-1 overflow-y-auto px-2">
         {/* Error Display */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -350,99 +503,74 @@ Answer their question based on the tab information provided.`;
           </div>
         )}
 
-        {/* Clear Button */}
-        {(searchResults.length > 0 || response) && (
-          <div className="flex justify-end mb-3">
-            <button
-              type="button"
-              onClick={() => {
-                console.log("🗑️ Clearing search results");
-                setSearchResults([]);
-                setResponse("");
-                setError("");
-              }}
-              className="px-3 py-2 bg-red-100 text-red-600 rounded-lg font-semibold text-xs hover:bg-red-200 transition-colors"
-            >
-              🗑️ Clear Results
-            </button>
-          </div>
-        )}
-
-        {/* Search Results - Show First */}
-        {searchResults.length > 0 ? (
-          <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-lg">🔍</span>
-              <span className="font-bold text-slate-800 text-base">Relevant Tabs Found!</span>
-              <span className="px-2 py-1 bg-blue-500 text-white rounded-full text-xs font-bold">
-                {searchResults.length}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {searchResults.map((tab, index) => (
-                <div
-                  key={tab.tabId || index}
-                  className="flex items-center justify-between p-3 bg-white border-2 border-slate-300 rounded-lg cursor-pointer hover:border-primary-400 transition-colors"
-                  onClick={() => handleTabClick(tab.tabId)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-1 bg-primary-500 text-white rounded text-xs font-bold">
-                        [{index + 1}]
-                      </span>
-                      <span className="text-xs text-slate-600 font-semibold">{tab.matchType || 'Match'}</span>
-                      <span className="text-xs text-green-600">Score: {tab.score || 0}</span>
-                    </div>
-                    <div className="font-bold text-sm text-slate-900 truncate">
-                      {tab.tabInfo?.title || "Untitled"}
-                    </div>
-                    <div className="text-xs text-slate-500 truncate">
-                      {tab.tabInfo?.url || "No URL"}
-                    </div>
+        {/* Chat Log */}
+        <div className="space-y-3">
+          {messages.map((m, idx) => {
+            if (m.role === "user") {
+              return (
+                <div key={idx} className="flex justify-end">
+                  <div className="max-w-[85%] bg-primary-50/60 border border-primary-200 rounded-xl p-3 shadow-sm">
+                    <div className="text-xs text-slate-500 mb-1">You</div>
+                    <div className="text-slate-800 text-sm whitespace-pre-wrap">{m.text}</div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTabClick(tab.tabId);
-                    }}
-                    className="px-4 py-2 text-sm bg-primary-500 text-white rounded-lg shadow-md font-bold hover:bg-primary-600 transition-colors"
-                  >
-                    Open
-                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          isProcessing && (
-            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
-              <div className="text-sm text-blue-700">🔍 Searching for relevant tabs...</div>
-            </div>
-          )
-        )}
-
-        {/* Response Display */}
-        {response && (
-          <div className="mb-4 p-4 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm">🤖</span>
-              <span className="font-semibold text-slate-700 text-sm">AI Response</span>
-            </div>
-            <div
-              className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: response }}
-            />
-          </div>
-        )}
+              );
+            }
+            // assistant message
+            return (
+              <div key={idx} className="flex justify-start">
+                <div className="w-full max-w-[95%]">
+                  {/* AI Response */}
+                  <div className="p-4 bg-gradient-to-r from-primary-50/30 to-purple-50/30 border border-slate-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm">🤖</span>
+                      <span className="font-semibold text-slate-700 text-sm">AI Response</span>
+                    </div>
+                    <div
+                      className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: m.html }}
+                    />
+                    {/* Single reference link at bottom (highest score) */}
+                    {m.reference?.url && (
+                      <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div className="text-xs text-slate-500 mb-1">Reference</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <a
+                            href={m.reference.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary-700 hover:underline truncate"
+                            title={m.reference.title || m.reference.url}
+                          >
+                            {m.reference.title || m.reference.url}
+                          </a>
+                          {m.reference.tabId && (
+                            <button
+                              onClick={() => handleTabClick(m.reference.tabId)}
+                              className="px-3 py-1 text-xs bg-primary-500 text-white rounded hover:bg-primary-600"
+                            >
+                              Open
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={chatEndRef} />
+        </div>
 
         {/* Empty State */}
-        {!response && !isProcessing && !error && searchResults.length === 0 && (
+        {messages.length === 0 && !isProcessing && !error && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-slate-400">
               <div className="text-4xl mb-3 opacity-50">💬</div>
-              <div className="font-semibold mb-1 text-base">Ask me anything about your tabs!</div>
+              <div className="font-semibold mb-1 text-base">Ask anything about your tabs and bookmarks</div>
               <div className="text-xs max-w-sm">
-                I can help you find specific tabs, understand their content, or get insights about your browsing patterns.
+                Try: "Summarize my current tab", "Summarize the YouTube video on my tab", "Provide similar resources", or "Show tabs about AI".
               </div>
             </div>
           </div>
