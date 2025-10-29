@@ -6,6 +6,12 @@
   "action": {
     "default_title": "Open Side Panel"
   },
+  "icons": {
+    "16": "logo.png",
+    "32": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
   "background": {
     "service_worker": "src/background/index.js",
     "type": "module"
