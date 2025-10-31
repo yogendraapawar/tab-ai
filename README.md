@@ -93,6 +93,18 @@ TabSense is a Chrome extension that helps researchers and knowledge workers mana
 
 That's it! Click on the **TabSense** chrome extension and start using it.
 
+## ✅ Usage
+```
+
+  👋 Need some help?
+
+    • use `Scan tabs` button to scan and load all your tabs 🔄
+    • use `Categorize tabs` button to cluster all your tabs into theme and summarize them 🔍
+    • use `Group tabs` button to group and open all your bookmarked links 📂
+    • use `Ask AI` button to query your questions on your open tabs 🤖
+
+```
+
 ## 🧑‍💻 Contributing
 <p align="justify">
   Contributions make the open-source community an incredible place to learn, inspire, and create, and any you make are <strong>greatly appreciated</strong>. If you have suggestions for improvement, please fork the repo, create a pull request, or simply open an issue. And don't forget to give the project a star—thanks again!
