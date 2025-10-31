@@ -79,4 +79,4 @@ That's it! Hot reloading works automatically.
 [issues-url]: https://github.com/yogendraapawar/tab-ai/issues
 
 [license-shield]: https://img.shields.io/github/license/yogendraapawar/tab-ai?style=for-the-badge
-[license-url]: https://github.com/yogendraapawar/tab-ai?tab=MIT-1-ov-file
+[license-url]: https://github.com/yogendraapawar/tab-ai/blob/main/LICENSE
