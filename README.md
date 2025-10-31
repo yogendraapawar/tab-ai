@@ -78,5 +78,5 @@ That's it! Hot reloading works automatically.
 [issues-shield]: https://img.shields.io/github/issues/yogendraapawar/tab-ai?style=for-the-badge
 [issues-url]: https://github.com/yogendraapawar/tab-ai/issues
 
-[license-shield]: https://img.shields.io/github/license/RocketChat/Apps.Emoji.Embellisher?style=for-the-badge
-[license-url]: https://github.com/RocketChat/Apps.Emoji.Embellisher/blob/main/LICENSE
+[license-shield]: https://img.shields.io/github/license/yogendraapawar/tab-ai?style=for-the-badge
+[license-url]: https://github.com/yogendraapawar/tab-ai/blob/main/LICENSE
