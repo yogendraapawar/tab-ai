@@ -93,6 +93,17 @@ TabSense is a Chrome extension that helps researchers and knowledge workers mana
 
 That's it! Click on the **TabSense** chrome extension and start using it.
 
+## 🧑‍💻 Contributing
+<p align="justify">
+  Contributions make the open-source community an incredible place to learn, inspire, and create, and any you make are <strong>greatly appreciated</strong>. If you have suggestions for improvement, please fork the repo, create a pull request, or simply open an issue. And don't forget to give the project a star—thanks again!
+</p>
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feat/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'feat: adds some amazing feature'`)
+4. Push to the Branch (`git push origin feat/AmazingFeature`)
+5. Open a Pull Request
+
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 <!-- MARKDOWN LINKS & IMAGES -->
