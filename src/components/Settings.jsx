@@ -127,10 +127,9 @@ export default function Settings({ isOpen, onClose }) {
                   onChange={(e) => updateSetting("cloudModel", e.target.value)}
                   className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-lg bg-white text-sm font-medium focus:outline-none focus:border-primary-500 transition-colors"
                 >
-                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Experimental)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                  <option value="gemini-1.5-flash-8b">Gemini 1.5 Flash 8B</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 </select>
                 <p className="text-xs text-slate-500 mt-2">
                   Model used when running in cloud mode.

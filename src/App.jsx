@@ -520,7 +520,7 @@ export default function App() {
         <div className="flex items-center justify-between gap-3 flex-nowrap">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl text-white font-bold text-lg flex items-center justify-center shadow-lg shadow-primary-400/40 ring-1 ring-white/50">
-              TS
+              <img src="/src/assets/logo.png" alt="TabSense Logo" className="w-18 h-18 object-contain" />
             </div>
             <div className="min-w-0">
               <h1 className="m-0 text-2xl font-bold gradient-text leading-tight">TabSense</h1>
