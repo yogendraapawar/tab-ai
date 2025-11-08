@@ -9,7 +9,7 @@ TabSense is a Chrome extension that helps researchers and knowledge workers mana
 </p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=fi8BRWbYpqA">View Demo</a>
+  <a href="https://youtu.be/OBDS2zft6PU">View Demo</a>
   ·
   <a href="https://github.com/RocketChat/Apps.Emoji.Embellisher/issues">Request Feature</a>
   ·
